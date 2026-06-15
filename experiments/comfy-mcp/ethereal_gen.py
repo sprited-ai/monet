@@ -35,24 +35,20 @@ NEG = (
 # (key, palette/composition/mood). Wide net — accumulate; one will fly.
 # Add freely; runs are ADDITIVE (never deletes), each gets a unique seed.
 VARIANTS = [
-    ("blue-pink-halo", "pastel blue and pink haze, a faint halo of light above her head"),
-    ("lavender-veil", "soft lavender and white, veiled in drifting mist"),
-    ("mint-fade", "pale mint and white, lower body fading into nothing"),
-    ("peach-dawn", "warm peach and pale blue, soft sunrise glow"),
-    ("gold-white", "pale gold and white light, radiant, almost blinding"),
-    ("silver-blue", "cool silver-blue, frost light, crystalline mist"),
-    ("rosegold-mist", "rose gold and cream mist, warm faint"),
-    ("monochrome-white", "almost pure white on white, ghostly, barely there"),
-    ("teal-rose", "teal and rose pastel, soft gradient"),
-    ("ice-violet", "icy violet and white, cold bloom"),
-    ("tiny-distant", "a tiny distant figure in a vast field of pale blue-pink light"),
-    ("petals", "drifting pink flower petals, pale blue haze, soft"),
-    ("faceless-bloom", "face entirely lost in bloom, lavender and white, unrecognizable"),
-    ("backlit-window", "backlit by a bright window, pale interior light, blue and pink"),
-    ("water-mist", "standing in shallow still water, pale reflections, low mist"),
-    ("aurora-soft", "faint aurora colors bleeding into white, dissolving"),
+    ("pose-seated", "seated on the floor, knees drawn up, pale blue-pink haze, soft"),
+    ("pose-walking-away", "walking away from viewer, seen from behind, dissolving into white light"),
+    ("pose-looking-back", "glancing back over the shoulder, face half lost in bloom, lavender white"),
+    ("pose-floating", "weightless, floating, hair drifting, surrounded by light particles, blue pink"),
+    ("pose-curled", "curled up small, knees to chest, vast pale empty space around"),
+    ("pose-reaching", "one arm reaching up toward the light, silhouette dissolving, gold white"),
+    ("pose-profile", "side profile, gazing away, soft rim light, mint and white"),
+    ("pose-kneeling", "kneeling, head bowed, faint halo, pale silver-blue"),
+    ("crop-closeup", "extreme close-up of a face dissolving entirely into bloom, unrecognizable, white"),
+    ("crop-waist", "waist-up, arms loose, features washed out, rose and cream"),
+    ("two-figures", "two faint identical figures overlapping in the haze, ghostly, blue pink"),
+    ("dissolve-extreme", "almost entirely dissolved into light, only the faintest hint of a figure, white void"),
 ]
-SEED_BASE = 707007
+SEED_BASE = 808100
 W, H = 768, 1280
 
 
