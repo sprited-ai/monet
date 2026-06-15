@@ -18,3 +18,4 @@ The theming at least for now is that Monet is your anonymized virtual presence t
 
 While it is autonomous, it is like a second self under your custody.
 
+We are at rapid iteration mode. All this is subject to change.
