@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Design/process notes: Instagram account setup (`docs/003`), hand-design
   concept exploration (`docs/004`), and the Instagram post-generation plan
   via the ComfyUI MCP route (`docs/005`).
-- `references/design/` — early concept art (childhood photo/sprite/sketches,
-  grown-up sketch, alternative concept).
+- `references/` — early concept art (sprite, sketches, grown-up sketch,
+  alternative concept).
 
 ### Changed
 - Monet is now a closed, proprietary project. Replaced the README's

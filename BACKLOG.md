@@ -20,9 +20,8 @@ finished. See `CLAUDE.md` for the discipline.
 
 - [x] ComfyUI access via Cloudflare Access service token (+ Bot-Fight UA fix); reusable client.
 - [x] PERSONA.md authored, then revised: adult 21+, art-student practicing all subjects
-      (people included), childhood = separate track, DNA = `alternative-concept-1.png`.
+      (people included), DNA = `alternative-concept-1.png`.
 - [x] Removed MIT `LICENSE`; README/CHANGELOG updated to closed-source.
-- [x] Organized childhood assets into `references/design/childhood/` (moved, not deleted).
 - [x] Avatar sweep (8 S-tier × 3 seeds) regenerated as adults + contact sheet.
 - [x] Concept posts (4) + captions (`posts.md`) + IG preview HTML.
 - [x] Diverse style/subject exploration (12) + contact sheet.
