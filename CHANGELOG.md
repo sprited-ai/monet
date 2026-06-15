@@ -17,14 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grown-up sketch, alternative concept).
 
 ### Changed
+- Monet is now a closed, proprietary project. Replaced the README's
+  "Why open source?" section with a closed-source note.
 - `docs/002` — note that everything is subject to change during rapid
   iteration; minor cleanup in `docs/001`.
+
+### Removed
+- `LICENSE` (MIT) — the project is no longer open source.
 
 ## [0.0.1] - 2026-06-15
 
 ### Added
-- README overview of Monet: what a digital being is, what Monet offers, who
-  builds it, and the open-source rationale.
+- README overview of Monet: what a digital being is, what Monet offers, and
+  who builds it.
 - Funding note in the README — inference costs covered via Patreon donations.
 - Design note `docs/001-monet-powered-by.md` on the tech-stack direction:
   use an openclaw fork as reference/sandbox rather than reinventing.

@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 # Logs
 logs
 *.log
@@ -141,3 +144,28 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Sensitive Data Filter
+private/
+**/private/
+private-*
+**/private-*
+*.private.*
+*.private
+spicy/
+**/spicy/
+spicy-*
+**/spicy-*
+*.spicy.*
+*.spicy
+nsfw/
+**/nsfw/
+nsfw-*
+**/nsfw-*
+*.nsfw.*
+*.nsfw
+*.confidential.*
+*.sensitive.*
+sensitive-*/
+confidential-*/
+confidential/

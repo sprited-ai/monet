@@ -1,0 +1,111 @@
+# Models Monet uses, by purpose. Edit freely — this is the shared source of truth
+# (Jin + Monet). Generators can read this instead of hardcoding checkpoints.
+# Values use the short SYMLINK ALIASES on the server (e.g. `rin.safetensors` ->
+# rinFlanimeIllustrious_v40.safetensors); the full target is noted in a comment.
+#
+# Two distinct jobs (see PERSONA.md):
+#   avatar  = how Monet HERSELF looks (adult 21+, clean anime illustration)
+#   artwork = what she DRAWS as an art student (painterly, all subjects, people incl.)
+
+avatar:
+  default: rin
+  sampler: { sampler_name: euler_ancestral, scheduler: normal, steps: 32, cfg: 5.0 }
+  size: { width: 768, height: 1280 }          # tall frame for full-body
+  candidates:
+    - key: rin                                  # rinFlanimeIllustrious_v40
+      checkpoint: rin.safetensors
+      base: Illustrious
+      note: current default — soft, ethereal, on-DNA
+    - key: cocoa                                # CocoaMix_Yume_Illustrious_v_pred_v5_0
+      checkpoint: cocoa.safetensors
+      base: Illustrious (v-pred)
+      note: top-ranked S-tier; clean and pretty
+    - key: dasiwa                               # DasiwaIllustriousAnime_epitaphecstasy
+      checkpoint: dasiwa.safetensors
+      base: Illustrious
+      note: elegant, mature
+    - key: janku                                # JANKUTrainedChenkinNoobai_v777
+      checkpoint: janku.safetensors
+      base: NoobAI
+      note: dignified, clean
+
+artwork:
+  # Painterly styles for her practice/feed. Each = a base + (usually) a style LoRA.
+  # Audience sim favored the warm-impressionist lane (garden / water / still life / animals).
+  default: daubrez-flux
+  styles:
+    - key: daubrez-flux
+      base: Flux.1 D
+      diffusion_model: flux-dev.safetensors     # flux1-dev
+      lora: daubrez.safetensors                 # FLUX-daubrez-DB4RZ
+      lora_strength: 0.9
+      trigger: "DBRZ"
+      note: best for impressionist landscapes/light; Flux coherence
+    - key: impasto-noobai
+      base: NoobAI (v-pred)
+      checkpoint: noob.safetensors              # NoobAI-XL-Vpred-v1.0
+      lora: impasto.safetensors                 # noobai_vpred_1_style_painterly_v1.1
+      lora_strength: 0.85
+      trigger: "painterly, impasto, impressionism, oil painting (medium)"
+      note: impasto/impressionist — closest to her soul. NEEDS ModelSamplingDiscrete (v_prediction, zsnr).
+    - key: classipeint-sdxl
+      base: SDXL 1.0
+      checkpoint: wai.safetensors               # waiIllustriousSDXL_v170 (or a more realistic SDXL)
+      lora: classipeint.safetensors             # ClassipeintXL2.1
+      lora_strength: 0.85
+      trigger: "oil painting"
+      note: classic oil look
+    - key: monet-sd15
+      base: SD 1.5
+      checkpoint: null                          # TODO: pick/install an SD1.5 base on the server
+      lora: monet.safetensors                   # monet_v2-000004 (Claude Monet style)
+      lora_strength: 0.8
+      trigger: "painting (medium)"
+      note: literal Claude Monet style; SD1.5 — needs an SD1.5 base installed
+
+video_i2v:
+  # WAN 2.2 image-to-video (two-stage MoE: high then low noise).
+  high_noise: wan-i2v-high.safetensors        # wan2.2_i2v_high_noise_14B_fp8_scaled
+  low_noise: wan-i2v-low.safetensors          # wan2.2_i2v_low_noise_14B_fp8_scaled
+  text_encoder: umt5.safetensors              # umt5_xxl_fp8_e4m3fn_scaled
+  clip_vision: clip_vision_h.safetensors
+  vae: wan_2.1_vae.safetensors
+  sampler: { sampler_name: euler, scheduler: simple, total_steps: 20, cfg: 3.5, shift: 8.0 }
+
+kontext:
+  # FLUX Kontext — identity-preserving reframes/edits (e.g. headshot -> full body).
+  unet: kontext.safetensors                   # flux1-dev-kontext_fp8_scaled
+  clip: [clip_l.safetensors, t5xxl_fp16.safetensors]   # type: flux
+  vae: ae.safetensors
+  note: re-renders in Flux's softer style; good for layout, shifts aesthetic.
+
+shared_negative: >-
+  child, loli, kid, toddler, minor, lowres, bad anatomy, bad hands, missing fingers,
+  extra digits, jpeg artifacts, signature, watermark, text, worst quality, low quality
+
+# ---------------------------------------------------------------------------
+# PRIVATE / adult-capable models.
+#   HARD RULES (non-negotiable):
+#     - Subjects are ALWAYS adults (Monet is 21+). NEVER minors. Use private_negative.
+#     - Output goes ONLY to out/private/ (git-ignored) and is run through private_filter.py.
+#     - Never used to depict Monet as anything other than an adult.
+#   Catalogued for the private track; NOT used by the wholesome/avatar/artwork generators.
+# ---------------------------------------------------------------------------
+private:
+  checkpoints:
+    - checkpoint: pmp.safetensors        # pornmasterPro_noobV6              (NoobAI,      ranking S)
+    - checkpoint: cosplay.safetensors    # Hardcore_Asian_Cosplay_realistic (Illustrious, ranking S)
+    - checkpoint: wainsfw.safetensors    # waiNSFWIllustrious_v130           (Illustrious, ranking A)
+    - checkpoint: gray.safetensors       # GrayColorHentaiMix_Illustrious    (Illustrious, ranking A)
+    - checkpoint: hentai.safetensors     # HentaiModel_v1_0                  (SD 1.5,      ranking C)
+  loras:
+    - lora: DR34ML4Y_*.safetensors       # Civitai 1811313 (S-tier WAN/LTX video) — NOT yet downloaded
+      note: all-in-one NSFW video lora; install on demand
+  video_i2v:                             # NSFW-capable WAN 2.2 i2v variants (high/low MoE pairs)
+    - { high: dasiwa-i2v-high.safetensors, low: dasiwa-i2v-low.safetensors }       # DasiwaWAN22 Lightspeed
+    - { high: smoothmix-i2v-high.safetensors, low: smoothmix-i2v-low.safetensors } # smoothMixWan22
+    - { high: wan-nsfw-i2v-high.safetensors, low: wan-nsfw-i2v-low.safetensors }   # wan22EnhancedNSFW
+
+private_negative: >-
+  child, loli, kid, toddler, baby, infant, minor, underage, teen, teenager, young child,
+  shota, school, elementary, lowres, bad anatomy, bad hands, extra digits, watermark, text

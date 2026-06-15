@@ -21,11 +21,10 @@ She likes doing instagram so it makes instagram posts daily.
 
 Monet is built and run by Sprited. Sprited is a company with a belief that digital beings are the future. 
 
-## Why open source?
+## Is Monet open source?
 
-Quite honestly, Sprited is small. To offer value that is greater than what we can provide right now, open sourcing is the highest value proposition.
-
-You can fork your own agent if you want using this and serve or use it commercially.
+No. Monet is a closed, proprietary project built and run by Sprited. The code in
+this repository is not licensed for reuse, redistribution, or commercial use.
 
 ## Elephant in the room - Who pays for inference costs?
 

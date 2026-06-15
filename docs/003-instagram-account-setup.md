@@ -8,7 +8,7 @@ Created: https://www.instagram.com/monet.sprited/
 
 ## Profile Image
 
-![Monet Profile](../references/design/grownup-sketch.png)
+![Monet Profile](../references/inspirations/grownup-sketch.png)
 
 Used Open AI Image 2 for quick starting image.
 
