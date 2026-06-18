@@ -27,12 +27,21 @@
       **Chrome AND Safari** (autoplay gesture-gated = on-narrative "click to come alive"); stacked
       979 KB < source webm 1.8 MB. webm stays the R2 source; stacked is a CI-derived delivery.
       POC: `experiments/stacked-alpha-poc/`.
-- [ ] Build: **stacked-H.264 derivative CI** — push `contents/**/*.webm` → ubuntu (ffmpeg w/ libvpx)
-      decode VP9 alpha → vstack color+alpha → x264 → R2, changed-files-only.
+- [x] **Transform all → stacked .mp4 delivery:** 64 clips webm→stacked-H.264 (41 MB vs 96 MB);
+      originals backed up to `contents/monet/source/` (gitignored). Colocated `<name>.thumbnail.webp`
+      (native size, q90) for the grid; `WebGL StackedVideo` composite on hover. Editor draws an
+      origin crosshair. Pipeline (worker/middleware/measure/sync) switched .webm→.mp4; sync honors
+      `.gitignore`. Internal dirs `source|pose_out|archived` + `*.thumbnail.*` hidden from `/contents`.
+- [ ] **Editor: keyframe thumbnail picker** (later) — scrub a clip, pick the frame, save it as
+      `<name>.thumbnail.webp` (native size, so it just swaps which frame). Local-generated for now.
+- [ ] **Sidecar `<name>.json`** (not started) — hand-authored loop {in,out}, name, kind, tags.
+      Comes with the trim UI; the player reads it for loop-segment playback.
+- [ ] Build: **stacked-H.264 derivative CI** — push `contents/**` source → ubuntu (ffmpeg w/ libvpx)
+      decode VP9 alpha → vstack → x264 + thumbnail → R2, changed-files-only. (now done locally.)
 - [ ] Build: **Pixi player** — stacked-alpha shader, sprite anchored at `origin`, loop in/out
       (trim), gesture-to-play. Powers both `/editor` (per-clip trim UI) and the White Room.
-- [ ] Metadata: wire `/contents` to serve `index.json` (origin/framing/loop) so the player can
-      anchor + trim. `measure-contents.py` already generates it.
+- [ ] Metadata: wire `/contents` to serve `index.json` (origin/framing/loop). Editor already reads
+      `index.json` + `framings.json` directly for the origin crosshair.
 - [ ] Assets domain when needed for public/CDN: `monet-assets.sprited.ai` → monet-contents
       (per-project subdomain; keep `assets.sprited.ai` free for a future router).
 - [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
