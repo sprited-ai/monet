@@ -129,7 +129,8 @@ export default function StackedVideo({
         autoPlay={autoPlay}
         playsInline
         preload="auto"
-        style={{ display: 'none' }}
+        // not display:none — Safari won't decode it; keep it tiny + transparent
+        style={{ position: 'absolute', width: 2, height: 2, opacity: 0, pointerEvents: 'none' }}
       />
       <canvas ref={canvasRef} style={style} className={className} />
     </>

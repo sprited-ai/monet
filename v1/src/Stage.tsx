@@ -19,6 +19,18 @@ void main(){
   gl_FragColor=vec4(c.rgb,c.a*e);
 }`
 
+// Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
+// it stays blank. Keep the source element in the render tree but tiny + transparent.
+const HIDDEN_VIDEO: CSSProperties = {
+  position: 'absolute',
+  width: 2,
+  height: 2,
+  opacity: 0,
+  pointerEvents: 'none',
+  top: 0,
+  left: 0,
+}
+
 type Props = {
   src: string
   onClipEnd?: () => void
@@ -35,6 +47,7 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
   const mixTarget = useRef(0)
   const mixFrom = useRef(0)
   const blendStart = useRef(0)
+  const pending = useRef(-1) // slot a new clip is loading into (start blend when ready)
   const first = useRef(true)
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
@@ -93,6 +106,19 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
 
     let raf = 0
     const draw = (now: number) => {
+      // Start a pending transition once the incoming clip actually has a frame
+      // (readyState-driven, not event-driven — 'playing' was unreliable and could
+      // leave `active` stale, which dropped the next clip's onClipEnd and froze).
+      if (pending.current >= 0) {
+        const pv = vRef[pending.current].current
+        if (pv && pv.readyState >= 2) {
+          mixFrom.current = mixVal.current
+          mixTarget.current = pending.current
+          blendStart.current = now
+          active.current = pending.current
+          pending.current = -1
+        }
+      }
       // ease the blend toward its target
       if (mixVal.current !== mixTarget.current) {
         const t = Math.min(1, (now - blendStart.current) / blendMs)
@@ -150,20 +176,15 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
     v.src = src
     v.currentTime = 0
     v.play().catch(() => {})
-    const begin = () => {
-      v.removeEventListener('playing', begin)
-      mixFrom.current = mixVal.current
-      mixTarget.current = incoming
-      blendStart.current = performance.now()
-      active.current = incoming
-    }
-    v.addEventListener('playing', begin)
+    pending.current = incoming // the draw loop blends to it once it's decoding
   }, [src])
 
   return (
     <>
-      <video ref={vRef[0]} muted playsInline preload="auto" style={{ display: 'none' }} />
-      <video ref={vRef[1]} muted playsInline preload="auto" style={{ display: 'none' }} />
+      {/* Not display:none — Safari won't decode a display:none video (canvas stays
+          blank). Render it tiny + transparent so frames keep flowing to the texture. */}
+      <video ref={vRef[0]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
+      <video ref={vRef[1]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <canvas ref={canvasRef} style={style} />
     </>
   )
