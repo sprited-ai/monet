@@ -130,10 +130,10 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
       const h = () => {
         if (active.current === slot) onEnd.current?.()
       }
-      r.current!.addEventListener('ended', h)
+      r.current?.addEventListener('ended', h)
       return h
     })
-    return () => vRef.forEach((r, i) => r.current!.removeEventListener('ended', handlers[i]))
+    return () => vRef.forEach((r, i) => r.current?.removeEventListener('ended', handlers[i]))
   }, [])
 
   // Load a new clip into the inactive slot and cross-dissolve to it.
