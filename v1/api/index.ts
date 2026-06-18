@@ -15,13 +15,16 @@ app.get('/api/hello', (c) =>
 // + stills (png/webp). Internal dirs are hidden from the listing.
 const ANIM_EXT = /\.mp4$/i
 const STILL_EXT = /\.(png|webp|jpe?g)$/i
-const HIDDEN = /\/(archived|source|posters|pose_out)\//
+const HIDDEN = /\/(archived|source|pose_out)\//
+const THUMB = /\.thumbnail\./i // colocated <name>.thumbnail.webp posters
 
 // Collection: list of contents.
 app.get('/contents', async (c) => {
   const list = await c.env.CONTENTS.list({ prefix: 'monet/' })
   const items = list.objects
-    .filter((o) => !HIDDEN.test(o.key) && (ANIM_EXT.test(o.key) || STILL_EXT.test(o.key)))
+    .filter(
+      (o) => !HIDDEN.test(o.key) && !THUMB.test(o.key) && (ANIM_EXT.test(o.key) || STILL_EXT.test(o.key)),
+    )
     .map((o) => ({
       key: o.key,
       name: o.key.replace(/^monet\//, '').replace(/\.[^.]+$/, ''),

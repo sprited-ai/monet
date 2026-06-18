@@ -23,7 +23,7 @@ function devContents(): Plugin {
   const walk = (dir: string, base = ''): string[] => {
     const out: string[] = []
     for (const name of readdirSync(dir)) {
-      if (['pose_out', 'archived', 'source', 'posters', '.DS_Store'].includes(name)) continue
+      if (['pose_out', 'archived', 'source', '.DS_Store'].includes(name)) continue
       const full = join(dir, name)
       const rel = base ? `${base}/${name}` : name
       if (statSync(full).isDirectory()) out.push(...walk(full, rel))
@@ -39,7 +39,7 @@ function devContents(): Plugin {
         const url = (req.url ?? '').split('?')[0]
         if (url === '/contents') {
           const items = walk(ROOT)
-            .filter((k) => ANIM.test(k) || STILL.test(k))
+            .filter((k) => !k.includes('.thumbnail.') && (ANIM.test(k) || STILL.test(k)))
             .map((k) => ({
               key: k,
               name: k.replace(/^monet\//, '').replace(/\.[^.]+$/, ''),

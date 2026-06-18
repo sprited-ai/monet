@@ -29,11 +29,28 @@ export default function Editor() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [hovered, setHovered] = useState<string | null>(null)
+  const [origins, setOrigins] = useState<Record<string, [number, number]>>({})
 
   useEffect(() => {
-    fetch('/contents')
-      .then((r) => r.json() as Promise<{ items: Item[] }>)
-      .then((d) => setItems(d.items))
+    Promise.all([
+      fetch('/contents').then((r) => r.json() as Promise<{ items: Item[] }>),
+      fetch('/contents/index.json')
+        .then((r) => r.json())
+        .catch(() => ({ items: {} })),
+      fetch('/contents/framings.json')
+        .then((r) => r.json())
+        .catch(() => ({ framings: {} })),
+    ])
+      .then(([list, idx, fr]) => {
+        setItems(list.items)
+        // origin: stills carry their own; animations inherit their framing's.
+        const map: Record<string, [number, number]> = {}
+        for (const [name, e] of Object.entries(idx.items ?? {}) as [string, any][]) {
+          const o = e.origin ?? fr.framings?.[e.framing]?.origin
+          if (o) map[name] = o
+        }
+        setOrigins(map)
+      })
       .catch(() => setError('Could not load contents from the worker.'))
       .finally(() => setLoading(false))
   }, [])
@@ -85,21 +102,24 @@ export default function Editor() {
             onMouseLeave={() => setHovered((h) => (h === it.key ? null : h))}
           >
             <Flex direction="column" gap="2">
-              {it.type === 'animation' ? (
-                hovered === it.key ? (
-                  // composite the stacked-alpha clip (one WebGL context at a time)
-                  <StackedVideo src={`/contents/${it.key}`} autoPlay loop style={mediaStyle} />
+              <div style={{ position: 'relative', lineHeight: 0 }}>
+                {it.type === 'animation' ? (
+                  hovered === it.key ? (
+                    // composite the stacked-alpha clip (one WebGL context at a time)
+                    <StackedVideo src={`/contents/${it.key}`} autoPlay loop style={mediaStyle} />
+                  ) : (
+                    <img
+                      src={`/contents/${it.key.replace(/\.mp4$/, '.thumbnail.webp')}`}
+                      alt={it.name}
+                      loading="lazy"
+                      style={mediaStyle}
+                    />
+                  )
                 ) : (
-                  <img
-                    src={`/contents/monet/posters/${it.name}.png`}
-                    alt={it.name}
-                    loading="lazy"
-                    style={mediaStyle}
-                  />
-                )
-              ) : (
-                <img src={`/contents/${it.key}`} alt={it.name} loading="lazy" style={mediaStyle} />
-              )}
+                  <img src={`/contents/${it.key}`} alt={it.name} loading="lazy" style={mediaStyle} />
+                )}
+                {origins[it.name] && <Crosshair x={origins[it.name][0]} y={origins[it.name][1]} />}
+              </div>
               <Flex justify="between" align="center" gap="2">
                 <Text size="1" weight="medium" truncate title={it.name}>
                   {it.name}

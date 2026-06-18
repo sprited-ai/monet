@@ -64,7 +64,8 @@ def still_origin(path: Path):
 def main():
     base = CONTENTS / PREFIX
     files = sorted(p for p in base.iterdir()
-                   if p.is_file() and p.suffix.lower() in (ANIM_EXT | STILL_EXT))
+                   if p.is_file() and p.suffix.lower() in (ANIM_EXT | STILL_EXT)
+                   and ".thumbnail." not in p.name)  # skip colocated poster thumbnails
     items, framings = {}, {}
     for p in files:
         name = p.stem
