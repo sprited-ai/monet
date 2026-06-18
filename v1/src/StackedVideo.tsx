@@ -72,8 +72,11 @@ export default function StackedVideo({
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.enable(gl.BLEND)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    // No GL blending: one full-canvas quad writes (rgb, a) straight to the buffer.
+    // Blending it over the transparent clear would square alpha + premultiply rgb,
+    // darkening/warping semi-transparent (feathered + silhouette) pixels. The canvas
+    // is premultipliedAlpha:false, so the browser composites the straight result.
+    gl.disable(gl.BLEND)
 
     // Size the canvas buffer to the stacked clip's color region (top half).
     const sizeCanvas = () => {
