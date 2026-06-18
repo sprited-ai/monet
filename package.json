@@ -1,0 +1,14 @@
+{
+  "name": "monet-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Repo-level shared tooling (not an app). v* apps live in their own dirs.",
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "sync:contents": "node scripts/sync-contents-to-r2.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.60.0"
+  }
+}

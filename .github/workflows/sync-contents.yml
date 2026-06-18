@@ -1,0 +1,32 @@
+name: sync-contents
+
+# Push to main that touches contents/ → mirror changed files to the R2 bucket
+# `monet-contents`. Incremental via an in-bucket manifest (no commit-back).
+# This job legitimately needs the full checkout (it uploads the assets).
+
+on:
+  push:
+    branches: [main]
+    paths: ['contents/**']
+  workflow_dispatch:
+
+concurrency:
+  group: sync-contents
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Sync contents/ → r2://monet-contents
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm sync:contents

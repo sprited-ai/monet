@@ -1,0 +1,33 @@
+name: deploy-v1
+
+# Push to main that touches v1/ → build & deploy to monet-v1.sprited.ai.
+# One file = one version. To add v2: copy this file to deploy-v2.yml and swap v1 → v2.
+
+on:
+  push:
+    branches: [main]
+    paths: ['v1/**']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: v1 # fetch only this app, not the heavy contents/
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: v1/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
