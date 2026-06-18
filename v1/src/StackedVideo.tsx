@@ -9,9 +9,13 @@ import type { CSSProperties } from 'react'
 // (so callers can keep a poster visible until then — no flicker).
 
 const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.-p.y)/2.);gl_Position=vec4(p,0.,1.);}`
-const FS = `precision mediump float;varying vec2 uv;uniform sampler2D t;
+// Edge feather: fade alpha to 0 within `fw` of each frame edge, so sprites/effects
+// that reach the boundary soften out instead of hard-clipping.
+const FS = `precision mediump float;varying vec2 uv;uniform sampler2D t;uniform float fw;
 void main(){vec3 rgb=texture2D(t,vec2(uv.x,uv.y*0.5)).rgb;
-float a=texture2D(t,vec2(uv.x,0.5+uv.y*0.5)).r;gl_FragColor=vec4(rgb,a);}`
+float a=texture2D(t,vec2(uv.x,0.5+uv.y*0.5)).r;
+float e=smoothstep(0.0,fw,uv.x)*smoothstep(0.0,fw,1.0-uv.x)*smoothstep(0.0,fw,uv.y)*smoothstep(0.0,fw,1.0-uv.y);
+gl_FragColor=vec4(rgb,a*e);}`
 
 type Props = {
   src: string
@@ -20,6 +24,7 @@ type Props = {
   muted?: boolean
   onEnded?: () => void
   onReady?: () => void
+  feather?: number // edge feather width, fraction of frame (0 = off)
   style?: CSSProperties
   className?: string
 }
@@ -31,6 +36,7 @@ export default function StackedVideo({
   muted = true,
   onEnded,
   onReady,
+  feather = 0.04,
   style,
   className,
 }: Props) {
@@ -54,6 +60,7 @@ export default function StackedVideo({
     gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS))
     gl.linkProgram(pr)
     gl.useProgram(pr)
+    gl.uniform1f(gl.getUniformLocation(pr, 'fw'), Math.max(0.0001, feather))
     const buf = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, buf)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
