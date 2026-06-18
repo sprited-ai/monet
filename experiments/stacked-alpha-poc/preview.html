@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf8"><title>stacked alpha test</title>
+<style>
+  body{margin:0;background:
+    linear-gradient(45deg,#f0f 25%,#0ff 25%,#0ff 50%,#f0f 50%,#f0f 75%,#0ff 75%);
+    background-size:80px 80px;height:100vh;display:grid;place-items:center}
+  canvas{width:480px;height:480px}
+  #hud{position:fixed;top:8px;left:8px;background:#000c;color:#0f0;font:12px monospace;
+       padding:8px 10px;border-radius:6px;white-space:pre;z-index:10}
+</style></head><body>
+<canvas id="c" width="640" height="640"></canvas>
+<!-- NOT display:none — Safari won't decode/advance a hidden video used as a WebGL texture.
+     Keep it in the render tree but offscreen & invisible. -->
+<video id="v" src="clip.mp4" muted loop playsinline webkit-playsinline autoplay crossorigin
+       style="position:fixed;right:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none"></video>
+<div id="hud">starting…</div>
+<script>
+const v=document.getElementById('v'), cv=document.getElementById('c'), hud=document.getElementById('hud');
+const gl=cv.getContext('webgl',{premultipliedAlpha:false,alpha:true});
+let frames=0, lastT=-1, err='';
+const vs=`attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.-p.y)/2.);gl_Position=vec4(p,0.,1.);}`;
+const fs=`precision mediump float;varying vec2 uv;uniform sampler2D t;
+void main(){vec3 rgb=texture2D(t,vec2(uv.x,uv.y*0.5)).rgb;
+float a=texture2D(t,vec2(uv.x,0.5+uv.y*0.5)).r;
+gl_FragColor=vec4(rgb,a);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))err='shader:'+gl.getShaderInfoLog(o);return o;}
+const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const lp=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+function draw(){
+  if(v.readyState>=2){
+    try{gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,v);}catch(e){err='texImage:'+e.message;}
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    frames++;
+  }
+  if(v.currentTime!==lastT){lastT=v.currentTime;}
+  hud.textContent=
+    `readyState ${v.readyState}  paused ${v.paused}\n`+
+    `currentTime ${v.currentTime.toFixed(3)}  dur ${(v.duration||0).toFixed(2)}\n`+
+    `videoSize ${v.videoWidth}x${v.videoHeight}\n`+
+    `frames drawn ${frames}\n`+
+    `err: ${err||'(none)'}`;
+  requestAnimationFrame(draw);
+}
+function start(){v.play().then(()=>{err='';}).catch(e=>{err='play():'+e.name+' '+e.message;});}
+start();                                  // try autoplay (works where allowed)
+addEventListener('pointerdown',start);    // Safari: a user gesture unblocks autoplay
+addEventListener('keydown',start);
+draw();                                   // always render (frame 0 until play starts)
+if(v.paused) hud.dataset.hint='1';
+</script></body></html>

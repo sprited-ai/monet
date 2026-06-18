@@ -22,8 +22,17 @@
 - [x] `/editor` — previews all contents (animations + stills) with filter; hover to play. Worker
       exposes a single `/contents` resource (list + `/contents/<key>` stream). **Dev pulls from
       local `contents/` via a Vite middleware (R2 bypassed); prod serves from R2.** `worker/` → `api/`.
-- [ ] `/editor` next: per-clip trim UI — scrubber + in/out markers for loop-segment identification,
-      export segments.
+- [x] **Video-rendering decision (docs/008):** Pixi (canvas/WebGL) + **stacked-alpha H.264**
+      (color top / alpha-as-luma bottom, shader composites). Proven transparent + animating in
+      **Chrome AND Safari** (autoplay gesture-gated = on-narrative "click to come alive"); stacked
+      979 KB < source webm 1.8 MB. webm stays the R2 source; stacked is a CI-derived delivery.
+      POC: `experiments/stacked-alpha-poc/`.
+- [ ] Build: **stacked-H.264 derivative CI** — push `contents/**/*.webm` → ubuntu (ffmpeg w/ libvpx)
+      decode VP9 alpha → vstack color+alpha → x264 → R2, changed-files-only.
+- [ ] Build: **Pixi player** — stacked-alpha shader, sprite anchored at `origin`, loop in/out
+      (trim), gesture-to-play. Powers both `/editor` (per-clip trim UI) and the White Room.
+- [ ] Metadata: wire `/contents` to serve `index.json` (origin/framing/loop) so the player can
+      anchor + trim. `measure-contents.py` already generates it.
 - [ ] Assets domain when needed for public/CDN: `monet-assets.sprited.ai` → monet-contents
       (per-project subdomain; keep `assets.sprited.ai` free for a future router).
 - [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
