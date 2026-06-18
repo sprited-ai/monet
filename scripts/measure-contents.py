@@ -76,6 +76,16 @@ def main():
     # small) lands in this framing's canvas, by aligning the character.
     IDLE_REF = {"small": "monet-idle-small", "regular": "monet-idle-quarter",
                 "large": "monet-idle-large", "wide": "monet-idle-wide"}
+    # `origin` is hand-owned: preserve whatever is already in framings.json across
+    # re-measures (only frame + offset are (re)derived). Seeded from the idle still
+    # the first time, then never overwritten.
+    prev = {}
+    fjson = CONTENTS / "framings.json"
+    if fjson.exists():
+        try:
+            prev = json.loads(fjson.read_text()).get("framings", {})
+        except Exception:
+            prev = {}
     ref_tl = None  # reference char top-left (monet-idle-small), px
     ref = base / "monet-idle-small.png"
     if ref.exists():
@@ -90,8 +100,10 @@ def main():
         fe = {"frame": [W, H]}
         if ref_tl and b:
             fe["offset"] = [round(b[0] * W - ref_tl[0]), round(b[1] * H - ref_tl[1])]
-        if o:
-            fe["origin"] = [round(o[0] * W), round(o[1] * H)]  # px
+        if prev.get(fr, {}).get("origin"):
+            fe["origin"] = prev[fr]["origin"]  # keep your value
+        elif o:
+            fe["origin"] = [round(o[0] * W), round(o[1] * H)]  # seed (px)
         framings[fr] = fe
 
     for p in files:
@@ -108,7 +120,9 @@ def main():
                 # Fallback for framings with no idle reference above.
                 if framing not in framings:
                     fe = {"frame": list(dims)}
-                    if origin:
+                    if prev.get(framing, {}).get("origin"):
+                        fe["origin"] = prev[framing]["origin"]  # keep your value
+                    elif origin:
                         fe["origin"] = [round(origin[0] * dims[0]), round(origin[1] * dims[1])]
                     framings[framing] = fe
             items[name] = entry
