@@ -32,6 +32,8 @@ export default function Editor() {
   const [readyKey, setReadyKey] = useState<string | null>(null)
   const [origins, setOrigins] = useState<Record<string, [number, number]>>({})
   const [aspects, setAspects] = useState<Record<string, number>>({}) // content w/h, from loaded media
+  const [framingOf, setFramingOf] = useState<Record<string, string>>({})
+  const [regularRef, setRegularRef] = useState<[number, number, number, number] | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -47,11 +49,22 @@ export default function Editor() {
         setItems(list.items)
         // origin: stills carry their own; animations inherit their framing's.
         const map: Record<string, [number, number]> = {}
+        const fmap: Record<string, string> = {}
+        const regBboxes: number[][] = []
         for (const [name, e] of Object.entries(idx.items ?? {}) as [string, any][]) {
+          if (e.framing) fmap[name] = e.framing
           const o = e.origin ?? fr.framings?.[e.framing]?.origin
           if (o) map[name] = o
+          if (e.framing === 'regular' && e.bbox) regBboxes.push(e.bbox)
         }
         setOrigins(map)
+        setFramingOf(fmap)
+        if (regBboxes.length) {
+          const avg = [0, 1, 2, 3].map(
+            (i) => regBboxes.reduce((s, b) => s + b[i], 0) / regBboxes.length,
+          ) as [number, number, number, number]
+          setRegularRef(avg)
+        }
       })
       .catch(() => setError('Could not load contents from the worker.'))
       .finally(() => setLoading(false))
@@ -146,6 +159,9 @@ export default function Editor() {
                     style={fillStyle}
                   />
                 )}
+                {regularRef && framingOf[it.name] && framingOf[it.name] !== 'regular' && (
+                  <RefBox bbox={regularRef} aspect={aspects[it.key] ?? 1} />
+                )}
                 {origins[it.name] && (
                   <Crosshair
                     x={origins[it.name][0]}
@@ -175,18 +191,41 @@ export default function Editor() {
   )
 }
 
-// Crosshair at the normalized origin (x, y in content space) over the square box.
-// The content is contain-fit, so map through the letterbox using its aspect (w/h).
-function Crosshair({ x, y, aspect }: { x: number; y: number; aspect: number }) {
-  let cx = x
-  let cy = y
+// Map a content-space point (0–1) into the square box, accounting for contain letterbox.
+function toBox(x: number, y: number, aspect: number): [number, number] {
   if (aspect >= 1) {
-    const h = 1 / aspect // content height as a fraction of the square box
-    cy = (1 - h) / 2 + y * h
-  } else {
-    const w = aspect
-    cx = (1 - w) / 2 + x * w
+    const h = 1 / aspect
+    return [x, (1 - h) / 2 + y * h]
   }
+  const w = aspect
+  return [(1 - w) / 2 + x * w, y]
+}
+
+// Dashed reference rectangle (e.g. regular framing's char bounds) to gauge scale.
+function RefBox({ bbox, aspect }: { bbox: [number, number, number, number]; aspect: number }) {
+  const [x, y, w, h] = bbox
+  const [l, t] = toBox(x, y, aspect)
+  const [r, b] = toBox(x + w, y + h, aspect)
+  return (
+    <div
+      title="regular framing bounds"
+      style={{
+        position: 'absolute',
+        left: `${l * 100}%`,
+        top: `${t * 100}%`,
+        width: `${(r - l) * 100}%`,
+        height: `${(b - t) * 100}%`,
+        border: '1px dashed rgba(40,130,255,0.9)',
+        borderRadius: 2,
+        pointerEvents: 'none',
+      }}
+    />
+  )
+}
+
+// Crosshair at the normalized origin (x, y in content space) over the square box.
+function Crosshair({ x, y, aspect }: { x: number; y: number; aspect: number }) {
+  const [cx, cy] = toBox(x, y, aspect)
   return (
     <svg
       width="16"
@@ -227,5 +266,4 @@ const fillStyle: CSSProperties = {
   width: '100%',
   height: '100%',
   objectFit: 'contain',
-  transition: 'opacity 120ms ease',
 }
