@@ -4,9 +4,9 @@ import type { CSSProperties } from 'react'
 // Renders a stacked-alpha H.264 (color top / alpha-as-luma bottom) as a
 // transparent WebGL canvas. See docs/008-video-rendering.md.
 //
-// Playback is controlled via the underlying <video>: autoPlay tries immediately
-// (works once the session is unlocked by any gesture); otherwise call play()
-// after a user gesture. onEnded fires when a non-looping clip finishes.
+// The canvas is sized to the COLOR region (videoWidth × videoHeight/2) so any
+// aspect ratio composites correctly. onReady fires once playback actually starts
+// (so callers can keep a poster visible until then — no flicker).
 
 const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.-p.y)/2.);gl_Position=vec4(p,0.,1.);}`
 const FS = `precision mediump float;varying vec2 uv;uniform sampler2D t;
@@ -15,33 +15,29 @@ float a=texture2D(t,vec2(uv.x,0.5+uv.y*0.5)).r;gl_FragColor=vec4(rgb,a);}`
 
 type Props = {
   src: string
-  width?: number
-  height?: number
   loop?: boolean
   autoPlay?: boolean
   muted?: boolean
   onEnded?: () => void
-  videoRef?: (el: HTMLVideoElement | null) => void
+  onReady?: () => void
   style?: CSSProperties
   className?: string
 }
 
 export default function StackedVideo({
   src,
-  width = 640,
-  height = 640,
   loop = false,
   autoPlay = false,
   muted = true,
   onEnded,
-  videoRef,
+  onReady,
   style,
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const vRef = useRef<HTMLVideoElement>(null)
 
-  // GL compositor — set up once, drives off whatever the <video> is showing.
+  // GL compositor — set up once; draws whatever the <video> currently shows.
   useEffect(() => {
     const cv = canvasRef.current!
     const v = vRef.current!
@@ -71,9 +67,21 @@ export default function StackedVideo({
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    // Size the canvas buffer to the stacked clip's color region (top half).
+    const sizeCanvas = () => {
+      if (v.videoWidth) {
+        cv.width = v.videoWidth
+        cv.height = Math.max(1, Math.floor(v.videoHeight / 2))
+      }
+    }
+    sizeCanvas()
+    v.addEventListener('loadedmetadata', sizeCanvas)
+
     let raf = 0
     const draw = () => {
       if (v.readyState >= 2) {
+        gl.viewport(0, 0, cv.width, cv.height)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v)
         gl.clearColor(0, 0, 0, 0)
         gl.clear(gl.COLOR_BUFFER_BIT)
@@ -82,24 +90,29 @@ export default function StackedVideo({
       raf = requestAnimationFrame(draw)
     }
     draw()
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      v.removeEventListener('loadedmetadata', sizeCanvas)
+    }
   }, [])
 
-  // onEnded subscription
+  // Playback + events.
   useEffect(() => {
     const v = vRef.current!
-    if (!onEnded) return
-    v.addEventListener('ended', onEnded)
-    return () => v.removeEventListener('ended', onEnded)
-  }, [onEnded])
+    if (autoPlay) v.play().catch(() => {})
+    const playing = () => onReady?.()
+    v.addEventListener('playing', playing)
+    if (onEnded) v.addEventListener('ended', onEnded)
+    return () => {
+      v.removeEventListener('playing', playing)
+      if (onEnded) v.removeEventListener('ended', onEnded)
+    }
+  }, [src, autoPlay, onReady, onEnded])
 
   return (
     <>
       <video
-        ref={(el) => {
-          vRef.current = el
-          videoRef?.(el)
-        }}
+        ref={vRef}
         src={src}
         muted={muted}
         loop={loop}
@@ -108,7 +121,7 @@ export default function StackedVideo({
         preload="auto"
         style={{ display: 'none' }}
       />
-      <canvas ref={canvasRef} width={width} height={height} style={style} className={className} />
+      <canvas ref={canvasRef} style={style} className={className} />
     </>
   )
 }

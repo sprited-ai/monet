@@ -29,7 +29,9 @@ export default function Editor() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [hovered, setHovered] = useState<string | null>(null)
+  const [readyKey, setReadyKey] = useState<string | null>(null)
   const [origins, setOrigins] = useState<Record<string, [number, number]>>({})
+  const [aspects, setAspects] = useState<Record<string, number>>({}) // content w/h, from loaded media
 
   useEffect(() => {
     Promise.all([
@@ -65,11 +67,17 @@ export default function Editor() {
   )
   const shown = items.filter((i) => filter === 'all' || i.type === filter)
 
+  const rememberAspect = (key: string, el: HTMLImageElement) => {
+    if (el.naturalWidth && !aspects[key]) {
+      setAspects((a) => ({ ...a, [key]: el.naturalWidth / el.naturalHeight }))
+    }
+  }
+
   return (
     <Container size="4" px="4" py="6">
       <Flex direction="column" gap="3" mb="5">
         <Flex align="center" gap="3">
-          <Heading size="7">Content Editor</Heading>
+          <Heading size="7">Monet Editor</Heading>
           {!loading && !error && <Badge color="ruby">{items.length} items</Badge>}
         </Flex>
         <Text color="gray" size="2">
@@ -99,26 +107,52 @@ export default function Editor() {
           <Card
             key={it.key}
             onMouseEnter={() => setHovered(it.key)}
-            onMouseLeave={() => setHovered((h) => (h === it.key ? null : h))}
+            onMouseLeave={() => {
+              setHovered((h) => (h === it.key ? null : h))
+              setReadyKey((k) => (k === it.key ? null : k))
+            }}
           >
             <Flex direction="column" gap="2">
-              <div style={{ position: 'relative', lineHeight: 0 }}>
+              <div style={boxStyle}>
                 {it.type === 'animation' ? (
-                  hovered === it.key ? (
-                    // composite the stacked-alpha clip (one WebGL context at a time)
-                    <StackedVideo src={`/contents/${it.key}`} autoPlay loop style={mediaStyle} />
-                  ) : (
+                  <>
+                    {/* poster stays until the clip is actually playing — no flicker */}
                     <img
                       src={`/contents/${it.key.replace(/\.mp4$/, '.thumbnail.webp')}`}
                       alt={it.name}
                       loading="lazy"
-                      style={mediaStyle}
+                      onLoad={(e) => rememberAspect(it.key, e.currentTarget)}
+                      style={{
+                        ...fillStyle,
+                        opacity: hovered === it.key && readyKey === it.key ? 0 : 1,
+                      }}
                     />
-                  )
+                    {hovered === it.key && (
+                      <StackedVideo
+                        src={`/contents/${it.key}`}
+                        autoPlay
+                        loop
+                        onReady={() => setReadyKey(it.key)}
+                        style={{ ...fillStyle, position: 'absolute', inset: 0 }}
+                      />
+                    )}
+                  </>
                 ) : (
-                  <img src={`/contents/${it.key}`} alt={it.name} loading="lazy" style={mediaStyle} />
+                  <img
+                    src={`/contents/${it.key}`}
+                    alt={it.name}
+                    loading="lazy"
+                    onLoad={(e) => rememberAspect(it.key, e.currentTarget)}
+                    style={fillStyle}
+                  />
                 )}
-                {origins[it.name] && <Crosshair x={origins[it.name][0]} y={origins[it.name][1]} />}
+                {origins[it.name] && (
+                  <Crosshair
+                    x={origins[it.name][0]}
+                    y={origins[it.name][1]}
+                    aspect={aspects[it.key] ?? 1}
+                  />
+                )}
               </div>
               <Flex justify="between" align="center" gap="2">
                 <Text size="1" weight="medium" truncate title={it.name}>
@@ -141,8 +175,18 @@ export default function Editor() {
   )
 }
 
-// Small crosshair at the normalized origin (x, y in 0–1) over the media box.
-function Crosshair({ x, y }: { x: number; y: number }) {
+// Crosshair at the normalized origin (x, y in content space) over the square box.
+// The content is contain-fit, so map through the letterbox using its aspect (w/h).
+function Crosshair({ x, y, aspect }: { x: number; y: number; aspect: number }) {
+  let cx = x
+  let cy = y
+  if (aspect >= 1) {
+    const h = 1 / aspect // content height as a fraction of the square box
+    cy = (1 - h) / 2 + y * h
+  } else {
+    const w = aspect
+    cx = (1 - w) / 2 + x * w
+  }
   return (
     <svg
       width="16"
@@ -150,8 +194,8 @@ function Crosshair({ x, y }: { x: number; y: number }) {
       viewBox="0 0 16 16"
       style={{
         position: 'absolute',
-        left: `${x * 100}%`,
-        top: `${y * 100}%`,
+        left: `${cx * 100}%`,
+        top: `${cy * 100}%`,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
       }}
@@ -163,15 +207,25 @@ function Crosshair({ x, y }: { x: number; y: number }) {
   )
 }
 
-// Transparency checkerboard — reveals alpha and exposes baked-in backgrounds.
-const mediaStyle: CSSProperties = {
+// Square media box with a transparency checkerboard (reveals alpha + baked bgs).
+const boxStyle: CSSProperties = {
+  position: 'relative',
   width: '100%',
-  borderRadius: 8,
   aspectRatio: '1 / 1',
-  objectFit: 'contain',
+  borderRadius: 8,
+  overflow: 'hidden',
   backgroundColor: '#fff',
   backgroundImage:
     'linear-gradient(45deg, #dcdcdc 25%, transparent 25%), linear-gradient(-45deg, #dcdcdc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #dcdcdc 75%), linear-gradient(-45deg, transparent 75%, #dcdcdc 75%)',
   backgroundSize: '16px 16px',
   backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+}
+
+// Media (img/canvas) fills the box, preserving aspect — letterboxed for wide clips.
+const fillStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain',
+  transition: 'opacity 120ms ease',
 }
