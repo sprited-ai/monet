@@ -56,8 +56,29 @@ export default function Preview() {
           style={{ width: 'min(80vw, 80vh, 480px)', aspectRatio: '1 / 1' }}
         />
       ) : (
-        <div style={{ font: '15px ui-monospace, monospace', color: '#555' }}>
-          ▶ tap / click to wake Monet
+        // Before the wake gesture (autoplay is gated): show Monet's poster, static.
+        <div
+          style={{ position: 'relative', width: 'min(80vw, 80vh, 480px)', aspectRatio: '1 / 1' }}
+        >
+          <img
+            src={`/contents/monet/${clip}.thumbnail.webp`}
+            alt="Monet"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              font: '15px ui-monospace, monospace',
+              color: '#5a5048',
+            }}
+          >
+            <span style={{ background: '#faf7f2cc', padding: '6px 12px', borderRadius: 999 }}>
+              ▶ tap to wake Monet
+            </span>
+          </div>
         </div>
       )}
 
