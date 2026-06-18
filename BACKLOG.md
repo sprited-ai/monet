@@ -12,6 +12,11 @@
 - [x] Adopt repo conventions: `v*` disposable-island prototypes + shared root assets;
       **pnpm project-wide** (no workspace — islands stay independent, store dedupes disk).
       tsconfigs under `v1/conf/`. Documented in `docs/007-repo-structure.md`.
+- [x] CI/CD: push to `main` → GitHub Actions builds & deploys each changed `v*` to
+      `monet-v*.sprited.ai` (custom_domain route per worker). Config + workflow in repo;
+      config validated via `wrangler deploy --dry-run`. See `docs/007-repo-structure.md`.
+- [ ] Jin: add GitHub repo secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit + sprited.ai
+      Zone DNS/Routes:Edit) + `CLOUDFLARE_ACCOUNT_ID`; confirm sprited.ai zone is in that account.
 - [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
 - [ ] Wire animation playback from R2; idle loop + state transitions.
 

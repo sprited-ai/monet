@@ -52,6 +52,42 @@ pnpm build     # tsc -b && vite build
 pnpm deploy    # build + wrangler deploy  (needs `wrangler login`)
 ```
 
+## Deploy: push → `monet-v*.sprited.ai`
+
+GitHub Actions, deliberately boring: **one workflow file per version**
+(`.github/workflows/deploy-v1.yml`). Push to `main` touching `v1/` → build & deploy to
+`monet-v1.sprited.ai`. No matrix, no change-detection — to add a version, copy the file to
+`deploy-v2.yml` and swap `v1` → `v2`.
+
+- Each `v*/wrangler.jsonc` declares its domain:
+  `"routes": [{ "pattern": "monet-vN.sprited.ai", "custom_domain": true }]`.
+  On deploy, wrangler provisions the custom domain (DNS + cert) on the `sprited.ai` zone.
+- The deploy job uses `sparse-checkout: vN`, so it never pulls the heavy `contents/`.
+
+**One-time setup (owner, GitHub repo → Settings → Secrets and variables → Actions):**
+
+1. Create an **Account-owned** Cloudflare API token: *Account → Workers Scripts: Edit*,
+   *Account → Workers R2 Storage: Edit*; *Zone → Workers Routes: Edit* + *Zone → DNS: Edit* on
+   `sprited.ai` (DNS edit needed for `custom_domain` provisioning).
+2. Add repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+   (`1de23d72862d141559e321d278915d67`). The same token covers deploy + R2 sync.
+3. Confirm the `sprited.ai` zone lives in that Cloudflare account.
+
+## Assets: `contents/` → R2 (mirror)
+
+`contents/` is the source of truth in git (mirror), and is also synced to the R2 bucket
+`monet-contents` for the app to load at runtime (README: animations live on R2).
+
+- `.github/workflows/sync-contents.yml`: push to `main` touching `contents/**` → runs
+  `pnpm sync:contents` (`scripts/sync-contents-to-r2.mjs`).
+- Incremental: a `path → sha256` manifest is stored **in the bucket** (`.sync-manifest.json`),
+  so only changed/new files upload and CI needs no commit-back. Mirror mode — remote objects are
+  never deleted. `_pose_out/` (locally generated) is excluded.
+- Uses the same `CLOUDFLARE_API_TOKEN`; run locally with `pnpm sync:contents`.
+
+New version → copy the `routes` line with the new `monet-vN.sprited.ai`, copy `deploy-v1.yml` →
+`deploy-vN.yml`, and push.
+
 ## Git hygiene
 
 Root `.gitignore` already ignores `node_modules/` and `dist` globally, so `v*/node_modules`
