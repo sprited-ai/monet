@@ -141,6 +141,28 @@ export default function Editor() {
   )
 }
 
+// Small crosshair at the normalized origin (x, y in 0–1) over the media box.
+function Crosshair({ x, y }: { x: number; y: number }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      style={{
+        position: 'absolute',
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+      }}
+    >
+      <line x1="8" y1="1" x2="8" y2="15" stroke="#ff0050" strokeWidth="1.5" />
+      <line x1="1" y1="8" x2="15" y2="8" stroke="#ff0050" strokeWidth="1.5" />
+      <circle cx="8" cy="8" r="1.4" fill="#ff0050" />
+    </svg>
+  )
+}
+
 // Transparency checkerboard — reveals alpha and exposes baked-in backgrounds.
 const mediaStyle: CSSProperties = {
   width: '100%',
