@@ -20,8 +20,9 @@ const BUCKET = 'monet-contents'
 const MANIFEST_KEY = '.sync-manifest.json'
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const CONTENTS = join(ROOT, 'contents')
-const EXCLUDE_DIRS = new Set(['_pose_out', '_source']) // generated locally, never synced
-const EXCLUDE_FILES = new Set(['.DS_Store'])
+// Sync honors .gitignore: anything ignored (source/ backups, pose_out/ scratch,
+// .DS_Store, …) is skipped. gitignore is the single source of truth, so sync
+// exclusions never drift from it.
 
 const CONTENT_TYPES = {
   '.webm': 'video/webm',
@@ -43,18 +44,17 @@ function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
+function isIgnored(p) {
+  return spawnSync('git', ['check-ignore', '-q', p], { cwd: ROOT }).status === 0
+}
+
 function walk(dir) {
   const out = []
   for (const name of readdirSync(dir)) {
-    if (EXCLUDE_FILES.has(name)) continue
     const full = join(dir, name)
-    const st = statSync(full)
-    if (st.isDirectory()) {
-      if (EXCLUDE_DIRS.has(name)) continue
-      out.push(...walk(full))
-    } else {
-      out.push(full)
-    }
+    if (isIgnored(full)) continue // honor .gitignore (prunes ignored dirs + files)
+    if (statSync(full).isDirectory()) out.push(...walk(full))
+    else out.push(full)
   }
   return out
 }

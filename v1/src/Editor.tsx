@@ -91,7 +91,7 @@ export default function Editor() {
                   <StackedVideo src={`/contents/${it.key}`} autoPlay loop style={mediaStyle} />
                 ) : (
                   <img
-                    src={`/contents/monet/_posters/${it.name}.png`}
+                    src={`/contents/monet/posters/${it.name}.png`}
                     alt={it.name}
                     loading="lazy"
                     style={mediaStyle}

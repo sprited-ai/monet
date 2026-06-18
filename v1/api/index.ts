@@ -15,7 +15,7 @@ app.get('/api/hello', (c) =>
 // + stills (png/webp). Internal dirs are hidden from the listing.
 const ANIM_EXT = /\.mp4$/i
 const STILL_EXT = /\.(png|webp|jpe?g)$/i
-const HIDDEN = /\/(archived|_source|_posters|_pose_out)\//
+const HIDDEN = /\/(archived|source|posters|pose_out)\//
 
 // Collection: list of contents.
 app.get('/contents', async (c) => {

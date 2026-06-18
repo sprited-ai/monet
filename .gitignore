@@ -172,8 +172,8 @@ confidential/
 # external clone: 2.7GB of model weights, not tracked here
 experiments/bizarre-pose-estimator/
 
-_pose_out/
+contents/monet/pose_out/
 # playwright MCP scratch
 .playwright-mcp/
 
-contents/monet/_source/
+contents/monet/source/
