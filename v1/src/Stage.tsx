@@ -57,6 +57,8 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
     const cv = canvasRef.current!
     const a = vRef[0].current!
     const b = vRef[1].current!
+    a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
+    b.muted = true
     const gl = cv.getContext('webgl', { premultipliedAlpha: false, alpha: true })
     if (!gl) return
     const sh = (t: number, s: string) => {
@@ -82,6 +84,10 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      // 1×1 placeholder so the texture is COMPLETE before a video frame arrives —
+      // Safari renders the whole draw black if a bound sampler is incomplete (the
+      // 2nd slot has no clip yet on the first play). Chrome tolerates it.
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0]))
       return t
     }
     gl.activeTexture(gl.TEXTURE0)
