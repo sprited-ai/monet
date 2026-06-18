@@ -1,6 +1,6 @@
 """Two non-anime rendering languages for Monet (per Jin: no clean outline+fill).
 
-  brush/*  — pure brushstrokes, NO outlines (daubrez-flux, impressionist)
+  brush/*  — pure brushstrokes, NO outlines (impasto-noobai, impressionist)
   sketch/* — lines only, loose graphite/charcoal gesture (Perfect_Sketchbook)
 
 Both keep the ethereal/abstracted, high-key dissolve. Output -> out/wholesome/style-test/.
@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from comfy_client import Comfy
-from artwork_gen import flux_lora  # Daubrez/Flux brushstroke engine
+from artwork_gen import vpred_lora  # NoobAI/Impasto brushstroke engine
 
 W, H = 832, 1216
 
@@ -62,7 +62,7 @@ def main():
     out = Path(__file__).parent / "out" / "wholesome" / "style-test"
     print(f"server: {c.base}")
     for i, (key, prompt) in enumerate(BRUSH):
-        pid = c.queue(flux_lora(prompt, W, H, SEED + i))
+        pid = c.queue(vpred_lora(prompt, W, H, SEED + i))
         t0 = time.time()
         imgs = c.images(c.wait(pid, timeout=420))
         if imgs:

@@ -169,3 +169,7 @@ nsfw-*
 sensitive-*/
 confidential-*/
 confidential/
+# external clone: 2.7GB of model weights, not tracked here
+experiments/bizarre-pose-estimator/
+
+_pose_out/

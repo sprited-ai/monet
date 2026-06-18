@@ -1,7 +1,7 @@
-"""Full-body persona in the DNA's crisp anime style (not Kontext/Flux).
+"""Full-body persona in the DNA's crisp anime style.
 
-The DNA (alternative-concept-1.png) is a clean anime illustration; Kontext re-rendered
-it in Flux's soft semi-3D look, which read as ugly. Here we regenerate full-body on the
+The DNA (alternative-concept-1.png) is a clean anime illustration. Image-to-image reframing
+re-rendered it in a soft semi-3D look, which read as ugly. Here we regenerate full-body on the
 anime checkpoint that already rendered Monet well, described to match the DNA, so the
 aesthetic matches. Saves candidates to out/persona/.
 """

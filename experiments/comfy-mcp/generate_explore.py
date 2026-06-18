@@ -37,7 +37,7 @@ EXPLORE = [
     ("portrait-anime-youth", COAMIX, "portrait of a young man, clean anime illustration, soft cel shading, simple background", 832, 1216),
     ("stilllife-sunflowers", YUME, "impressionist oil painting, vase of sunflowers on a wooden table, thick brushstrokes, warm light, no humans", 1024, 1024),
     ("landscape-waterlilies", YUME, "impressionist landscape, pond with water lilies, soft reflections, plein air, dappled light, no humans, thick brushstrokes", 1216, 832),
-    ("monet-garden", YUME, "in the style of Claude Monet, flower garden in bloom, dappled sunlight, impressionism, visible brushstrokes, no humans", 1216, 832),
+    ("monet-garden", YUME, "in the style of Monet, flower garden in bloom, dappled sunlight, impressionism, visible brushstrokes, no humans", 1216, 832),
     ("street-cafe-watercolor", COAMIX, "loose watercolor painting, quiet european street cafe, afternoon light, a few figures, wet-on-wet", 1216, 832),
     ("cat-watercolor", COAMIX, "watercolor painting of a sleeping cat on a sunlit windowsill, soft wash, gentle", 1024, 1024),
     ("hills-flat", FLAT, "flat illustration, rolling hills at sunset, minimal clean shapes, bold color blocks, no humans", 1216, 832),

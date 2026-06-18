@@ -1,7 +1,6 @@
 """Artwork track — Monet's painterly practice using the installed fine-art LoRAs.
 
-Three engines, one per base, each stacking a painterly LoRA:
-  - flux_lora   : flux1-dev + Daubrez (DBRZ)       — best landscapes/light
+Two engines, one per base, each stacking a painterly LoRA:
   - vpred_lora  : NoobAI-XL-Vpred + Impasto         — impressionist/impasto (v_pred fix applied)
   - sdxl_lora   : WAI-Illustrious + ClassipeintXL   — classic oil
 
@@ -32,22 +31,6 @@ SUBJECTS = {
 }
 
 
-def flux_lora(prompt, w, h, seed):
-    return {
-        "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": "flux1-dev.safetensors", "weight_dtype": "default"}},
-        "clip": {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "clip_l.safetensors", "clip_name2": "t5xxl_fp16.safetensors", "type": "flux"}},
-        "vae": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
-        "lora": {"class_type": "LoraLoader", "inputs": {"model": ["unet", 0], "clip": ["clip", 0], "lora_name": "FLUX-daubrez-DB4RZ.safetensors", "strength_model": 0.9, "strength_clip": 0.9}},
-        "pos": {"class_type": "CLIPTextEncode", "inputs": {"text": f"DBRZ, impressionist painting, {prompt}, thick visible brushstrokes, warm light", "clip": ["lora", 1]}},
-        "guid": {"class_type": "FluxGuidance", "inputs": {"conditioning": ["pos", 0], "guidance": 3.2}},
-        "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["pos", 0]}},
-        "latent": {"class_type": "EmptySD3LatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}},
-        "samp": {"class_type": "KSampler", "inputs": {"model": ["lora", 0], "positive": ["guid", 0], "negative": ["neg", 0], "latent_image": ["latent", 0], "seed": seed, "steps": 22, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
-        "dec": {"class_type": "VAEDecode", "inputs": {"samples": ["samp", 0], "vae": ["vae", 0]}},
-        "save": {"class_type": "SaveImage", "inputs": {"images": ["dec", 0], "filename_prefix": "monet/art"}},
-    }
-
-
 def vpred_lora(prompt, w, h, seed):
     return {
         "ckpt": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "NoobAI-XL-Vpred-v1.0.safetensors"}},
@@ -75,7 +58,7 @@ def sdxl_lora(prompt, w, h, seed):
     }
 
 
-STYLES = {"daubrez-flux": flux_lora, "impasto-noobai": vpred_lora, "classipeint-sdxl": sdxl_lora}
+STYLES = {"impasto-noobai": vpred_lora, "classipeint-sdxl": sdxl_lora}
 W, H = 1216, 832  # landscape orientation suits most subjects
 SEED = 880601
 

@@ -11,7 +11,7 @@ Voice: warm, a little quiet, a maker — not an assistant. English (product defa
 Monet
 ```
 
-- 5 chars. Clean and load-bearing — the name *is* the thesis (Claude Monet, the Impressionist).
+- 5 chars. Clean and load-bearing — the name *is* the thesis (Monet, the Impressionist).
 - Optional variant if you want the craft signal in the name field: `Monet · art studies` (19 chars).
 
 ## Username

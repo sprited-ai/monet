@@ -32,15 +32,8 @@ avatar:
 artwork:
   # Painterly styles for her practice/feed. Each = a base + (usually) a style LoRA.
   # Audience sim favored the warm-impressionist lane (garden / water / still life / animals).
-  default: daubrez-flux
+  default: impasto-noobai
   styles:
-    - key: daubrez-flux
-      base: Flux.1 D
-      diffusion_model: flux-dev.safetensors     # flux1-dev
-      lora: daubrez.safetensors                 # FLUX-daubrez-DB4RZ
-      lora_strength: 0.9
-      trigger: "DBRZ"
-      note: best for impressionist landscapes/light; Flux coherence
     - key: impasto-noobai
       base: NoobAI (v-pred)
       checkpoint: noob.safetensors              # NoobAI-XL-Vpred-v1.0
@@ -58,10 +51,10 @@ artwork:
     - key: monet-sd15
       base: SD 1.5
       checkpoint: null                          # TODO: pick/install an SD1.5 base on the server
-      lora: monet.safetensors                   # monet_v2-000004 (Claude Monet style)
+      lora: monet.safetensors                   # monet_v2-000004 (Monet style)
       lora_strength: 0.8
       trigger: "painting (medium)"
-      note: literal Claude Monet style; SD1.5 — needs an SD1.5 base installed
+      note: literal Monet style; SD1.5 — needs an SD1.5 base installed
 
 video_i2v:
   # WAN 2.2 image-to-video (two-stage MoE: high then low noise).
@@ -71,13 +64,6 @@ video_i2v:
   clip_vision: clip_vision_h.safetensors
   vae: wan_2.1_vae.safetensors
   sampler: { sampler_name: euler, scheduler: simple, total_steps: 20, cfg: 3.5, shift: 8.0 }
-
-kontext:
-  # FLUX Kontext — identity-preserving reframes/edits (e.g. headshot -> full body).
-  unet: kontext.safetensors                   # flux1-dev-kontext_fp8_scaled
-  clip: [clip_l.safetensors, t5xxl_fp16.safetensors]   # type: flux
-  vae: ae.safetensors
-  note: re-renders in Flux's softer style; good for layout, shifts aesthetic.
 
 shared_negative: >-
   child, loli, kid, toddler, minor, lowres, bad anatomy, bad hands, missing fingers,

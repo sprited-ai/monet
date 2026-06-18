@@ -1,6 +1,6 @@
 """Monet's first Instagram feed — a curated week of posts.
 
-Uses the winning artwork engine (daubrez-flux) across her art-student range
+Uses the winning artwork engine (impasto-noobai) across her art-student range
 (landscape, water, still life, animal, people, scene). Square 1:1 for the IG grid.
 Output -> out/wholesome/feed/<n>-<subject>.png
 """
@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from comfy_client import Comfy
-from artwork_gen import flux_lora  # reuse the Daubrez/Flux painterly engine
+from artwork_gen import vpred_lora  # reuse the NoobAI/Impasto painterly engine
 
 # Ordered as they'd post over a week. (n, subject, prompt)
 FEED = [
@@ -33,7 +33,7 @@ def main():
     out = Path(__file__).parent / "out" / "wholesome" / "feed"
     print(f"server: {c.base}")
     for n, subj, prompt in FEED:
-        pid = c.queue(flux_lora(prompt, W, H, SEED + n))
+        pid = c.queue(vpred_lora(prompt, W, H, SEED + n))
         t0 = time.time()
         imgs = c.images(c.wait(pid, timeout=420))
         if imgs:
