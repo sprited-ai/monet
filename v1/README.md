@@ -284,5 +284,5 @@ pnpm build     # tsc -b && vite build
 pnpm deploy    # build + wrangler deploy  (needs `wrangler login`)
 ```
 
-`/api/*` → Hono worker (`worker/index.ts`); everything else → SPA. tsconfigs live in `conf/`.
+`/api/*` and `/assets/*` → Hono worker (`api/index.ts`); everything else → SPA. tsconfigs live in `conf/`.
 Repo-wide conventions: see [`../docs/007-repo-structure.md`](../docs/007-repo-structure.md).
