@@ -11,15 +11,17 @@ app.get('/api/hello', (c) =>
   c.json({ message: 'Hello from Monet — Hono on Cloudflare Workers 👋' }),
 )
 
-// List contents mirrored to the monet-contents bucket: animations (webm) + stills (png/webp/jpg).
-const ANIM_EXT = /\.webm$/i
+// Contents in the monet-contents bucket: animations (stacked-alpha .mp4, see docs/008)
+// + stills (png/webp). Internal dirs are hidden from the listing.
+const ANIM_EXT = /\.mp4$/i
 const STILL_EXT = /\.(png|webp|jpe?g)$/i
+const HIDDEN = /\/(archived|_source|_posters|_pose_out)\//
 
 // Collection: list of contents.
 app.get('/contents', async (c) => {
   const list = await c.env.CONTENTS.list({ prefix: 'monet/' })
   const items = list.objects
-    .filter((o) => !o.key.includes('/archived/') && (ANIM_EXT.test(o.key) || STILL_EXT.test(o.key)))
+    .filter((o) => !HIDDEN.test(o.key) && (ANIM_EXT.test(o.key) || STILL_EXT.test(o.key)))
     .map((o) => ({
       key: o.key,
       name: o.key.replace(/^monet\//, '').replace(/\.[^.]+$/, ''),

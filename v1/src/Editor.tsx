@@ -10,6 +10,7 @@ import {
   Badge,
   SegmentedControl,
 } from '@radix-ui/themes'
+import StackedVideo from './StackedVideo'
 
 type Item = { key: string; name: string; size: number; type: 'animation' | 'still' }
 type Filter = 'all' | 'animation' | 'still'
@@ -27,6 +28,7 @@ export default function Editor() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [hovered, setHovered] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/contents')
@@ -77,22 +79,24 @@ export default function Editor() {
 
       <Grid columns={{ initial: '2', sm: '3', md: '4' }} gap="4">
         {shown.map((it) => (
-          <Card key={it.key}>
+          <Card
+            key={it.key}
+            onMouseEnter={() => setHovered(it.key)}
+            onMouseLeave={() => setHovered((h) => (h === it.key ? null : h))}
+          >
             <Flex direction="column" gap="2">
               {it.type === 'animation' ? (
-                <video
-                  src={`/contents/${it.key}`}
-                  loop
-                  muted
-                  playsInline
-                  preload="metadata"
-                  onMouseEnter={(e) => void e.currentTarget.play().catch(() => {})}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.pause()
-                    e.currentTarget.currentTime = 0
-                  }}
-                  style={mediaStyle}
-                />
+                hovered === it.key ? (
+                  // composite the stacked-alpha clip (one WebGL context at a time)
+                  <StackedVideo src={`/contents/${it.key}`} autoPlay loop style={mediaStyle} />
+                ) : (
+                  <img
+                    src={`/contents/monet/_posters/${it.name}.png`}
+                    alt={it.name}
+                    loading="lazy"
+                    style={mediaStyle}
+                  />
+                )
               ) : (
                 <img src={`/contents/${it.key}`} alt={it.name} loading="lazy" style={mediaStyle} />
               )}

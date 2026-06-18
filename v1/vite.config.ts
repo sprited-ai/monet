@@ -13,7 +13,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
 }
-const ANIM = /\.webm$/i
+const ANIM = /\.mp4$/i
 const STILL = /\.(png|webp|jpe?g)$/i
 
 // Dev only: serve the /contents resource straight from the local contents/ folder,
@@ -23,7 +23,7 @@ function devContents(): Plugin {
   const walk = (dir: string, base = ''): string[] => {
     const out: string[] = []
     for (const name of readdirSync(dir)) {
-      if (name === '_pose_out' || name === 'archived' || name === '.DS_Store') continue
+      if (['_pose_out', 'archived', '_source', '_posters', '.DS_Store'].includes(name)) continue
       const full = join(dir, name)
       const rel = base ? `${base}/${name}` : name
       if (statSync(full).isDirectory()) out.push(...walk(full, rel))

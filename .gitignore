@@ -173,3 +173,7 @@ confidential/
 experiments/bizarre-pose-estimator/
 
 _pose_out/
+# playwright MCP scratch
+.playwright-mcp/
+
+contents/monet/_source/

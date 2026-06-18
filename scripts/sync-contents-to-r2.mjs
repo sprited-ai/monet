@@ -20,7 +20,7 @@ const BUCKET = 'monet-contents'
 const MANIFEST_KEY = '.sync-manifest.json'
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const CONTENTS = join(ROOT, 'contents')
-const EXCLUDE_DIRS = new Set(['_pose_out']) // generated locally, never synced
+const EXCLUDE_DIRS = new Set(['_pose_out', '_source']) // generated locally, never synced
 const EXCLUDE_FILES = new Set(['.DS_Store'])
 
 const CONTENT_TYPES = {

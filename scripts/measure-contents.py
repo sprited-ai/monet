@@ -24,7 +24,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 CONTENTS = ROOT / "contents"
 PREFIX = "monet"
-ANIM_EXT = {".webm"}
+ANIM_EXT = {".mp4"}
 STILL_EXT = {".png", ".webp", ".jpg", ".jpeg"}
 
 
