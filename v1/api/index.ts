@@ -19,7 +19,7 @@ const STILL_EXT = /\.(png|webp|jpe?g)$/i
 app.get('/contents', async (c) => {
   const list = await c.env.CONTENTS.list({ prefix: 'monet/' })
   const items = list.objects
-    .filter((o) => ANIM_EXT.test(o.key) || STILL_EXT.test(o.key))
+    .filter((o) => !o.key.includes('/archived/') && (ANIM_EXT.test(o.key) || STILL_EXT.test(o.key)))
     .map((o) => ({
       key: o.key,
       name: o.key.replace(/^monet\//, '').replace(/\.[^.]+$/, ''),

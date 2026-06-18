@@ -18,6 +18,10 @@ function kb(n: number) {
   return n > 1024 * 1024 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`
 }
 
+function ext(key: string) {
+  return key.slice(key.lastIndexOf('.') + 1).toLowerCase()
+}
+
 export default function Editor() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,9 +100,14 @@ export default function Editor() {
                 <Text size="1" weight="medium" truncate title={it.name}>
                   {it.name}
                 </Text>
-                <Text size="1" color="gray">
-                  {kb(it.size)}
-                </Text>
+                <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                  <Badge size="1" variant="soft" color={it.type === 'animation' ? 'ruby' : 'gray'}>
+                    {ext(it.key)}
+                  </Badge>
+                  <Text size="1" color="gray">
+                    {kb(it.size)}
+                  </Text>
+                </Flex>
               </Flex>
             </Flex>
           </Card>
@@ -108,10 +117,15 @@ export default function Editor() {
   )
 }
 
+// Transparency checkerboard — reveals alpha and exposes baked-in backgrounds.
 const mediaStyle: CSSProperties = {
   width: '100%',
   borderRadius: 8,
-  background: '#111',
   aspectRatio: '1 / 1',
   objectFit: 'contain',
+  backgroundColor: '#fff',
+  backgroundImage:
+    'linear-gradient(45deg, #dcdcdc 25%, transparent 25%), linear-gradient(-45deg, #dcdcdc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #dcdcdc 75%), linear-gradient(-45deg, transparent 75%, #dcdcdc 75%)',
+  backgroundSize: '16px 16px',
+  backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
 }

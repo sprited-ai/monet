@@ -23,7 +23,7 @@ function devContents(): Plugin {
   const walk = (dir: string, base = ''): string[] => {
     const out: string[] = []
     for (const name of readdirSync(dir)) {
-      if (name === '_pose_out' || name === '.DS_Store') continue
+      if (name === '_pose_out' || name === 'archived' || name === '.DS_Store') continue
       const full = join(dir, name)
       const rel = base ? `${base}/${name}` : name
       if (statSync(full).isDirectory()) out.push(...walk(full, rel))
