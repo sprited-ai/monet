@@ -33,7 +33,9 @@ export default function Editor() {
   const [origins, setOrigins] = useState<Record<string, [number, number]>>({})
   const [aspects, setAspects] = useState<Record<string, number>>({}) // content w/h, from loaded media
   const [framingOf, setFramingOf] = useState<Record<string, string>>({})
-  const [framings, setFramings] = useState<Record<string, { frame: [number, number] }>>({})
+  const [framings, setFramings] = useState<
+    Record<string, { frame: [number, number]; offset?: [number, number]; origin?: [number, number] }>
+  >({})
 
   useEffect(() => {
     Promise.all([
@@ -47,13 +49,18 @@ export default function Editor() {
     ])
       .then(([list, idx, fr]) => {
         setItems(list.items)
-        // origin: stills carry their own; animations inherit their framing's.
+        // origin (normalized): stills carry their own; animations inherit their
+        // framing's, which framings.json stores in pixels — normalize by its frame.
         const map: Record<string, [number, number]> = {}
         const fmap: Record<string, string> = {}
         for (const [name, e] of Object.entries(idx.items ?? {}) as [string, any][]) {
           if (e.framing) fmap[name] = e.framing
-          const o = e.origin ?? fr.framings?.[e.framing]?.origin
-          if (o) map[name] = o
+          if (e.origin) {
+            map[name] = e.origin
+          } else {
+            const f = fr.framings?.[e.framing]
+            if (f?.origin && f?.frame) map[name] = [f.origin[0] / f.frame[0], f.origin[1] / f.frame[1]]
+          }
         }
         setOrigins(map)
         setFramingOf(fmap)
@@ -152,8 +159,12 @@ export default function Editor() {
                     style={fillStyle}
                   />
                 )}
-                {framings[framingOf[it.name]]?.frame && (
-                  <SafeBound frame={framings[framingOf[it.name]].frame} aspect={aspects[it.key] ?? 1} />
+                {framings[framingOf[it.name]]?.offset && (
+                  <SafeBound
+                    frame={framings[framingOf[it.name]].frame}
+                    offset={framings[framingOf[it.name]].offset!}
+                    aspect={aspects[it.key] ?? 1}
+                  />
                 )}
                 {origins[it.name] && (
                   <Crosshair
@@ -197,12 +208,21 @@ function toBox(x: number, y: number, aspect: number): [number, number] {
 // The 1024² safe bound — the true reference region (= center 1024 crop of the
 // regular frame; see monet-idle-small.png). Centered in each framing's frame.
 const SAFE = 1024
-function SafeBound({ frame, aspect }: { frame: [number, number]; aspect: number }) {
+function SafeBound({
+  frame,
+  offset,
+  aspect,
+}: {
+  frame: [number, number]
+  offset: [number, number]
+  aspect: number
+}) {
   const [W, H] = frame
-  const fw = Math.min(1, SAFE / W)
-  const fh = Math.min(1, SAFE / H)
-  const x = (1 - fw) / 2
-  const y = (1 - fh) / 2
+  const [ox, oy] = offset // px offset of the 1024² box within this framing's canvas
+  const x = ox / W
+  const y = oy / H
+  const fw = SAFE / W
+  const fh = SAFE / H
   const [l, t] = toBox(x, y, aspect)
   const [r, b] = toBox(x + fw, y + fh, aspect)
   return (

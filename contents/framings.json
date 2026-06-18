@@ -1,34 +1,61 @@
 {
-  "base": "regular",
+  "default": "regular",
+  "base": "small",
   "framings": {
-    "large": {
-      "origin": [
-        0.4831,
-        0.9115
-      ],
+    "small": {
       "frame": [
-        1536,
-        1536
+        1024,
+        1024
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "origin": [
+        489,
+        980
       ]
     },
     "regular": {
-      "origin": [
-        0.5008,
-        0.8733
-      ],
       "frame": [
         1184,
         1184
+      ],
+      "offset": [
+        80,
+        80
+      ],
+      "origin": [
+        570,
+        1060
+      ]
+    },
+    "large": {
+      "frame": [
+        1536,
+        1536
+      ],
+      "offset": [
+        256,
+        432
+      ],
+      "origin": [
+        746,
+        1412
       ]
     },
     "wide": {
-      "origin": [
-        0.7792,
-        0.9412
-      ],
       "frame": [
         2043,
         1173
+      ],
+      "offset": [
+        -75,
+        125
+      ],
+      "origin": [
+        414,
+        1104
       ]
     }
   }

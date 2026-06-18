@@ -67,6 +67,31 @@ def main():
                    if p.is_file() and p.suffix.lower() in (ANIM_EXT | STILL_EXT)
                    and ".thumbnail." not in p.name)  # skip colocated poster thumbnails
     items, framings = {}, {}
+
+    # Each framing is anchored by its IDLE still (same pose across framings), so frame
+    # size + offset are stable (other stills vary in pose / L-R, skewing a "first
+    # still"). All values in PIXELS. `offset` = where the 1024² safe box (monet-idle-
+    # small) lands in this framing's canvas, by aligning the character.
+    IDLE_REF = {"small": "monet-idle-small", "regular": "monet-idle-quarter",
+                "large": "monet-idle-large", "wide": "monet-idle-wide"}
+    ref_tl = None  # reference char top-left (monet-idle-small), px
+    ref = base / "monet-idle-small.png"
+    if ref.exists():
+        _, rb, rd = still_origin(ref)
+        if rb:
+            ref_tl = (rb[0] * rd[0], rb[1] * rd[1])
+    for fr, fname in IDLE_REF.items():
+        fp = base / f"{fname}.png"
+        if not fp.exists():
+            continue
+        o, b, (W, H) = still_origin(fp)
+        fe = {"frame": [W, H]}
+        if ref_tl and b:
+            fe["offset"] = [round(b[0] * W - ref_tl[0]), round(b[1] * H - ref_tl[1])]
+        if o:
+            fe["origin"] = [round(o[0] * W), round(o[1] * H)]  # px
+        framings[fr] = fe
+
     for p in files:
         name = p.stem
         framing = framing_of(name)
@@ -77,9 +102,12 @@ def main():
             else:
                 origin, bbox, dims = still_origin(p)
                 entry.update({"origin": origin, "bbox": bbox})
-                # First still of a framing defines its frame size (for the safe bound).
+                # Fallback for framings with no idle reference above.
                 if framing not in framings:
-                    framings[framing] = {"origin": origin, "frame": list(dims)}
+                    fe = {"frame": list(dims)}
+                    if origin:
+                        fe["origin"] = [round(origin[0] * dims[0]), round(origin[1] * dims[1])]
+                    framings[framing] = fe
             items[name] = entry
             print(f"{name:32} {framing:8} {entry.get('origin', '(inherits framing)')}")
         except Exception as ex:
@@ -87,7 +115,7 @@ def main():
 
     (CONTENTS / "index.json").write_text(json.dumps({"items": items}, indent=2))
     (CONTENTS / "framings.json").write_text(
-        json.dumps({"base": "regular", "framings": framings}, indent=2))
+        json.dumps({"default": "regular", "base": "small", "framings": framings}, indent=2))
     print(f"\nwrote contents/index.json ({len(items)} items) "
           f"+ contents/framings.json ({sorted(framings)})")
 
