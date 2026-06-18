@@ -114,19 +114,13 @@ def main():
             if p.suffix.lower() in ANIM_EXT:
                 entry.update(ffprobe(p))  # framing-only layout; no CV on opaque frames
             else:
-                origin, bbox, dims = still_origin(p)
-                # frame matches framings.json's per-framing frame definition (px).
-                entry.update({"frame": list(dims), "origin": origin, "bbox": bbox})
-                # Fallback for framings with no idle reference above.
+                # Stills carry NO per-item geometry — frame/offset/origin all come
+                # from framings.json[framing]. Only derive a frame for a framing that
+                # somehow has no idle reference above.
                 if framing not in framings:
-                    fe = {"frame": list(dims)}
-                    if prev.get(framing, {}).get("origin"):
-                        fe["origin"] = prev[framing]["origin"]  # keep your value
-                    elif origin:
-                        fe["origin"] = [round(origin[0] * dims[0]), round(origin[1] * dims[1])]
-                    framings[framing] = fe
+                    framings[framing] = {"frame": list(still_origin(p)[2])}
             items[name] = entry
-            print(f"{name:32} {framing:8} {entry.get('origin', '(inherits framing)')}")
+            print(f"{name:32} {framing:8}")
         except Exception as ex:
             print(f"ERR {p.name}: {type(ex).__name__}: {ex}", file=sys.stderr)
 
