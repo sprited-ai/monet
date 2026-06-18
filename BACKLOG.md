@@ -15,8 +15,17 @@
 - [x] CI/CD: push to `main` → GitHub Actions builds & deploys each changed `v*` to
       `monet-v*.sprited.ai` (custom_domain route per worker). Config + workflow in repo;
       config validated via `wrangler deploy --dry-run`. See `docs/007-repo-structure.md`.
-- [ ] Jin: add GitHub repo secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit + sprited.ai
-      Zone DNS/Routes:Edit) + `CLOUDFLARE_ACCOUNT_ID`; confirm sprited.ai zone is in that account.
+- [x] CI secrets in place + first deploy live: **monet-v1.sprited.ai** (custom domain provisioned,
+      API + SPA verified in prod). Workflow simplified to one file per version (`deploy-v1.yml`).
+- [x] Assets → R2: `contents/` mirrors to bucket `monet-contents` (sync-contents.yml, incremental
+      via in-bucket manifest). Backfilled 90 objects.
+- [x] `/editor` — previews all contents (animations + stills) with filter; hover to play. Worker
+      exposes a single `/contents` resource (list + `/contents/<key>` stream). **Dev pulls from
+      local `contents/` via a Vite middleware (R2 bypassed); prod serves from R2.** `worker/` → `api/`.
+- [ ] `/editor` next: per-clip trim UI — scrubber + in/out markers for loop-segment identification,
+      export segments.
+- [ ] Assets domain when needed for public/CDN: `monet-assets.sprited.ai` → monet-contents
+      (per-project subdomain; keep `assets.sprited.ai` free for a future router).
 - [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
 - [ ] Wire animation playback from R2; idle loop + state transitions.
 
