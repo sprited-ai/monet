@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import StackedVideo from './StackedVideo'
 
 // ── Monet behavior FSM (hand-rolled, no deps) ───────────────────────────────
@@ -15,6 +15,7 @@ const STATES: Record<StateName, { pool: string[]; onEnd: () => StateName }> = {
 }
 
 const clipSrc = (name: string) => `/contents/monet/${name}.mp4`
+const FADE_MS = 350 // crossfade between clips so cuts (color/pose) don't pop
 
 // Pick a clip from the pool, avoiding an immediate repeat when possible.
 function pickClip(pool: string[], avoid: string | null) {
@@ -22,19 +23,36 @@ function pickClip(pool: string[], avoid: string | null) {
   return choices[Math.floor(Math.random() * choices.length)]
 }
 
+type Layer = { id: number; clip: string }
+
 export default function Preview() {
   const [started, setStarted] = useState(false)
-  const [state, setState] = useState<StateName>('resting')
-  const [clip, setClip] = useState<string>(() => pickClip(STATES.resting.pool, null))
+  const [layers, setLayers] = useState<Layer[]>(() => [
+    { id: 0, clip: pickClip(STATES.resting.pool, null) },
+  ])
+  const [shownId, setShownId] = useState(0) // the layer that should be opaque
   const [plays, setPlays] = useState(0)
+  const idRef = useRef(1)
+  const stateRef = useRef<StateName>('resting')
 
-  // Clip finished → ask the current state where to go, then pick the next clip.
-  const onEnded = useCallback(() => {
-    const next = STATES[state].onEnd()
-    setState(next)
-    setClip((prev) => pickClip(STATES[next].pool, prev))
+  // A clip finished → pick the next (per the FSM) and stack it as a new layer.
+  // It fades in once it's actually playing (onReady), crossfading over the old.
+  const onEnded = useCallback((endedClip: string) => {
+    const next = STATES[stateRef.current].onEnd()
+    stateRef.current = next
+    const clip = pickClip(STATES[next].pool, endedClip)
+    const id = idRef.current++
+    setLayers((ls) => [...ls.slice(-1), { id, clip }]) // keep only old + new
     setPlays((n) => n + 1)
-  }, [state])
+  }, [])
+
+  // New layer is playing → fade it in, then drop the layer underneath.
+  const onReady = useCallback((id: number) => {
+    setShownId(id)
+    window.setTimeout(() => setLayers((ls) => ls.filter((l) => l.id === id)), FADE_MS)
+  }, [])
+
+  const shownClip = layers.find((l) => l.id === shownId)?.clip ?? layers[layers.length - 1].clip
 
   return (
     <div
@@ -49,12 +67,25 @@ export default function Preview() {
       }}
     >
       {started ? (
-        <StackedVideo
-          src={clipSrc(clip)}
-          autoPlay
-          onEnded={onEnded}
-          style={{ width: 'min(80vw, 80vh, 480px)', aspectRatio: '1 / 1' }}
-        />
+        <div style={{ position: 'relative', width: 'min(80vw, 80vh, 480px)', aspectRatio: '1 / 1' }}>
+          {layers.map((l) => (
+            <StackedVideo
+              key={l.id}
+              src={clipSrc(l.clip)}
+              autoPlay
+              onEnded={() => onEnded(l.clip)}
+              onReady={() => onReady(l.id)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                opacity: l.id === shownId ? 1 : 0,
+                transition: `opacity ${FADE_MS}ms ease`,
+              }}
+            />
+          ))}
+        </div>
       ) : (
         <div style={{ font: '15px ui-monospace, monospace', color: '#555' }}>
           ▶ tap / click to wake Monet
@@ -75,8 +106,8 @@ export default function Preview() {
           pointerEvents: 'none',
         }}
       >
-        {`state: ${state}
-clip:  ${clip}
+        {`state: ${stateRef.current}
+clip:  ${shownClip}
 plays: ${plays}
 ${started ? 'resting — random idle loop' : 'tap to start'}`}
       </div>
