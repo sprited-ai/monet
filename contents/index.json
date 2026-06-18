@@ -395,14 +395,29 @@
       "name": "monet-idle-right-wide",
       "framing": "wide",
       "origin": [
-        0.7791,
-        0.9288
+        0.7792,
+        0.9412
       ],
       "bbox": [
-        0.6772,
-        0.178,
+        0.6774,
+        0.1688,
         0.2036,
-        0.7508
+        0.7724
+      ]
+    },
+    "monet-idle-small": {
+      "key": "monet/monet-idle-small.png",
+      "name": "monet-idle-small",
+      "framing": "regular",
+      "origin": [
+        0.478,
+        0.957
+      ],
+      "bbox": [
+        0.2744,
+        0.0713,
+        0.4072,
+        0.8857
       ]
     },
     "monet-idle-wide": {
@@ -410,14 +425,14 @@
       "name": "monet-idle-wide",
       "framing": "wide",
       "origin": [
-        0.2029,
-        0.9296
+        0.2026,
+        0.9412
       ],
       "bbox": [
-        0.1011,
-        0.1788,
+        0.1008,
+        0.1688,
         0.2036,
-        0.7508
+        0.7724
       ]
     },
     "monet-jump-large-1": {

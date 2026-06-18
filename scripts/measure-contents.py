@@ -49,16 +49,16 @@ def ffprobe(path: Path) -> dict:
 
 
 def still_origin(path: Path):
-    """Normalized (origin[cx,bottom], bbox[x,y,w,h]) from the alpha channel, or (None,None)."""
+    """(origin[cx,bottom], bbox[x,y,w,h] normalized, frame[W,H]) or (None,None,(W,H))."""
     im = Image.open(path).convert("RGBA")
     W, H = im.size
     box = im.getchannel("A").getbbox()
     if not box:
-        return None, None
+        return None, None, (W, H)
     l, u, r, lo = box
     origin = [round((l + r) / 2 / W, 4), round(lo / H, 4)]
     bbox = [round(l / W, 4), round(u / H, 4), round((r - l) / W, 4), round((lo - u) / H, 4)]
-    return origin, bbox
+    return origin, bbox, (W, H)
 
 
 def main():
@@ -75,11 +75,11 @@ def main():
             if p.suffix.lower() in ANIM_EXT:
                 entry.update(ffprobe(p))  # framing-only layout; no CV on opaque frames
             else:
-                origin, bbox = still_origin(p)
+                origin, bbox, dims = still_origin(p)
                 entry.update({"origin": origin, "bbox": bbox})
-                # First still of a framing defines that framing's origin.
-                if origin and framing not in framings:
-                    framings[framing] = {"origin": origin, "pad": [0, 0, 0, 0]}
+                # First still of a framing defines its frame size (for the safe bound).
+                if framing not in framings:
+                    framings[framing] = {"origin": origin, "frame": list(dims)}
             items[name] = entry
             print(f"{name:32} {framing:8} {entry.get('origin', '(inherits framing)')}")
         except Exception as ex:

@@ -33,7 +33,7 @@ export default function Editor() {
   const [origins, setOrigins] = useState<Record<string, [number, number]>>({})
   const [aspects, setAspects] = useState<Record<string, number>>({}) // content w/h, from loaded media
   const [framingOf, setFramingOf] = useState<Record<string, string>>({})
-  const [regularRef, setRegularRef] = useState<[number, number, number, number] | null>(null)
+  const [framings, setFramings] = useState<Record<string, { frame: [number, number] }>>({})
 
   useEffect(() => {
     Promise.all([
@@ -50,21 +50,14 @@ export default function Editor() {
         // origin: stills carry their own; animations inherit their framing's.
         const map: Record<string, [number, number]> = {}
         const fmap: Record<string, string> = {}
-        const regBboxes: number[][] = []
         for (const [name, e] of Object.entries(idx.items ?? {}) as [string, any][]) {
           if (e.framing) fmap[name] = e.framing
           const o = e.origin ?? fr.framings?.[e.framing]?.origin
           if (o) map[name] = o
-          if (e.framing === 'regular' && e.bbox) regBboxes.push(e.bbox)
         }
         setOrigins(map)
         setFramingOf(fmap)
-        if (regBboxes.length) {
-          const avg = [0, 1, 2, 3].map(
-            (i) => regBboxes.reduce((s, b) => s + b[i], 0) / regBboxes.length,
-          ) as [number, number, number, number]
-          setRegularRef(avg)
-        }
+        setFramings(fr.framings ?? {})
       })
       .catch(() => setError('Could not load contents from the worker.'))
       .finally(() => setLoading(false))
@@ -159,8 +152,8 @@ export default function Editor() {
                     style={fillStyle}
                   />
                 )}
-                {regularRef && framingOf[it.name] && framingOf[it.name] !== 'regular' && (
-                  <RefBox bbox={regularRef} aspect={aspects[it.key] ?? 1} />
+                {framings[framingOf[it.name]]?.frame && (
+                  <SafeBound frame={framings[framingOf[it.name]].frame} aspect={aspects[it.key] ?? 1} />
                 )}
                 {origins[it.name] && (
                   <Crosshair
@@ -201,14 +194,20 @@ function toBox(x: number, y: number, aspect: number): [number, number] {
   return [(1 - w) / 2 + x * w, y]
 }
 
-// Dashed reference rectangle (e.g. regular framing's char bounds) to gauge scale.
-function RefBox({ bbox, aspect }: { bbox: [number, number, number, number]; aspect: number }) {
-  const [x, y, w, h] = bbox
+// The 1024² safe bound — the true reference region (= center 1024 crop of the
+// regular frame; see monet-idle-small.png). Centered in each framing's frame.
+const SAFE = 1024
+function SafeBound({ frame, aspect }: { frame: [number, number]; aspect: number }) {
+  const [W, H] = frame
+  const fw = Math.min(1, SAFE / W)
+  const fh = Math.min(1, SAFE / H)
+  const x = (1 - fw) / 2
+  const y = (1 - fh) / 2
   const [l, t] = toBox(x, y, aspect)
-  const [r, b] = toBox(x + w, y + h, aspect)
+  const [r, b] = toBox(x + fw, y + fh, aspect)
   return (
     <div
-      title="regular framing bounds"
+      title="1024² safe bound"
       style={{
         position: 'absolute',
         left: `${l * 100}%`,
