@@ -32,6 +32,10 @@
       "key": "monet/monet-angry-large.png",
       "name": "monet-angry-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4831,
         0.9115
@@ -68,6 +72,10 @@
       "key": "monet/monet-brush-large-2.png",
       "name": "monet-brush-large-2",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.5114,
         0.9186
@@ -132,6 +140,10 @@
       "key": "monet/monet-cough-large.png",
       "name": "monet-cough-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.512,
         0.9186
@@ -168,6 +180,10 @@
       "key": "monet/monet-doze-off-1.png",
       "name": "monet-doze-off-1",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5008,
         0.8733
@@ -183,6 +199,10 @@
       "key": "monet/monet-doze-off-2.png",
       "name": "monet-doze-off-2",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5,
         0.8801
@@ -198,6 +218,10 @@
       "key": "monet/monet-doze-off-3.png",
       "name": "monet-doze-off-3",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5283,
         0.9046
@@ -220,6 +244,10 @@
       "key": "monet/monet-dozz-off-4.png",
       "name": "monet-dozz-off-4",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5131,
         0.9062
@@ -270,6 +298,10 @@
       "key": "monet/monet-full-large.png",
       "name": "monet-full-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4997,
         0.9206
@@ -334,6 +366,10 @@
       "key": "monet/monet-idle-front.png",
       "name": "monet-idle-front",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.4996,
         0.8944
@@ -349,6 +385,10 @@
       "key": "monet/monet-idle-large.png",
       "name": "monet-idle-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4854,
         0.9193
@@ -364,6 +404,10 @@
       "key": "monet/monet-idle-quarter-back.png",
       "name": "monet-idle-quarter-back",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5177,
         0.8868
@@ -379,6 +423,10 @@
       "key": "monet/monet-idle-quarter.png",
       "name": "monet-idle-quarter",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.481,
         0.8953
@@ -394,6 +442,10 @@
       "key": "monet/monet-idle-right-wide.png",
       "name": "monet-idle-right-wide",
       "framing": "wide",
+      "frame": [
+        2043,
+        1173
+      ],
       "origin": [
         0.7792,
         0.9412
@@ -408,7 +460,11 @@
     "monet-idle-small": {
       "key": "monet/monet-idle-small.png",
       "name": "monet-idle-small",
-      "framing": "regular",
+      "framing": "small",
+      "frame": [
+        1024,
+        1024
+      ],
       "origin": [
         0.478,
         0.957
@@ -424,6 +480,10 @@
       "key": "monet/monet-idle-wide.png",
       "name": "monet-idle-wide",
       "framing": "wide",
+      "frame": [
+        2043,
+        1173
+      ],
       "origin": [
         0.2026,
         0.9412
@@ -488,6 +548,10 @@
       "key": "monet/monet-pillow.png",
       "name": "monet-pillow",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5131,
         0.9062
@@ -538,6 +602,10 @@
       "key": "monet/monet-sad-large.png",
       "name": "monet-sad-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.5033,
         0.9193
@@ -560,6 +628,10 @@
       "key": "monet/monet-scared-large.png",
       "name": "monet-scared-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4883,
         0.9167
@@ -575,6 +647,10 @@
       "key": "monet/monet-shy-large.png",
       "name": "monet-shy-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4948,
         0.9199
@@ -590,6 +666,10 @@
       "key": "monet/monet-sick-large-2.png",
       "name": "monet-sick-large-2",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4896,
         0.9167
@@ -605,6 +685,10 @@
       "key": "monet/monet-sick-large.png",
       "name": "monet-sick-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.5085,
         0.9303
@@ -620,6 +704,10 @@
       "key": "monet/monet-sinister-large.png",
       "name": "monet-sinister-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.5345,
         0.9232
@@ -649,6 +737,10 @@
       "key": "monet/monet-sit.png",
       "name": "monet-sit",
       "framing": "regular",
+      "frame": [
+        1184,
+        1184
+      ],
       "origin": [
         0.5165,
         0.9341
@@ -762,6 +854,10 @@
       "key": "monet/monet-umbrella-large-2.png",
       "name": "monet-umbrella-large-2",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4521,
         0.918
@@ -777,6 +873,10 @@
       "key": "monet/monet-umbrella-large.png",
       "name": "monet-umbrella-large",
       "framing": "large",
+      "frame": [
+        1536,
+        1536
+      ],
       "origin": [
         0.4753,
         0.9232

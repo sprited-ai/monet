@@ -33,6 +33,8 @@ def framing_of(name: str) -> str:
         return "wide"
     if "-large" in name:
         return "large"
+    if "-small" in name:
+        return "small"
     return "regular"
 
 
@@ -101,7 +103,8 @@ def main():
                 entry.update(ffprobe(p))  # framing-only layout; no CV on opaque frames
             else:
                 origin, bbox, dims = still_origin(p)
-                entry.update({"origin": origin, "bbox": bbox})
+                # frame matches framings.json's per-framing frame definition (px).
+                entry.update({"frame": list(dims), "origin": origin, "bbox": bbox})
                 # Fallback for framings with no idle reference above.
                 if framing not in framings:
                     fe = {"frame": list(dims)}
