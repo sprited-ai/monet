@@ -267,3 +267,22 @@ https://marukun712.github.io/kokoro/depth.html
 seems like it works on stylized arts.
 
 we should utilize it.
+
+## Pose Estimation
+
+We will also utilize bizzare anime pose estimator for our use.
+
+## Dev (this app)
+
+v1 is the first encounter slice. Current state: hello-world scaffold —
+React 19 + Radix Themes + Hono on Cloudflare Workers (`@cloudflare/vite-plugin`).
+
+```bash
+pnpm install
+pnpm dev       # http://localhost:8788  (Vite HMR + Hono worker)
+pnpm build     # tsc -b && vite build
+pnpm deploy    # build + wrangler deploy  (needs `wrangler login`)
+```
+
+`/api/*` → Hono worker (`worker/index.ts`); everything else → SPA. tsconfigs live in `conf/`.
+Repo-wide conventions: see [`../docs/007-repo-structure.md`](../docs/007-repo-structure.md).
