@@ -41,12 +41,22 @@ app.get('/contents', async (c) => {
 // disk, so the Worker (and R2) is bypassed entirely — see vite.config.ts.
 app.get('/contents/*', async (c) => {
   const key = decodeURIComponent(c.req.path.replace(/^\/contents\//, ''))
-  const obj = await c.env.CONTENTS.get(key)
+  // Safari requires HTTP Range for <video> (else MEDIA_ERR_SRC_NOT_SUPPORTED).
+  const rangeHeader = c.req.header('range')
+  const obj = await c.env.CONTENTS.get(key, rangeHeader ? { range: c.req.raw.headers } : undefined)
   if (!obj) return c.notFound()
   const headers = new Headers()
   obj.writeHttpMetadata(headers)
   headers.set('etag', obj.httpEtag)
+  headers.set('accept-ranges', 'bytes')
   headers.set('cache-control', 'public, max-age=3600')
+  const r = obj.range as { offset?: number; length?: number } | undefined
+  if (rangeHeader && r) {
+    const offset = r.offset ?? 0
+    const length = r.length ?? obj.size - offset
+    headers.set('content-range', `bytes ${offset}-${offset + length - 1}/${obj.size}`)
+    return new Response(obj.body, { status: 206, headers })
+  }
   return new Response(obj.body, { headers })
 })
 

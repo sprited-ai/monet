@@ -61,7 +61,28 @@ function devContents(): Plugin {
           }
           const ct = CONTENT_TYPES[extname(file).toLowerCase()]
           if (ct) res.setHeader('content-type', ct)
-          createReadStream(file).pipe(res)
+          // Safari requires HTTP Range support for <video> (else MEDIA_ERR_SRC_NOT_SUPPORTED).
+          const size = statSync(file).size
+          res.setHeader('Accept-Ranges', 'bytes')
+          const range = req.headers.range
+          if (range) {
+            const m = /bytes=(\d*)-(\d*)/.exec(range)
+            const start = m && m[1] ? parseInt(m[1], 10) : 0
+            const end = m && m[2] ? parseInt(m[2], 10) : size - 1
+            if (start > end || start >= size) {
+              res.statusCode = 416
+              res.setHeader('Content-Range', `bytes */${size}`)
+              res.end()
+              return
+            }
+            res.statusCode = 206
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+            res.setHeader('Content-Length', end - start + 1)
+            createReadStream(file, { start, end }).pipe(res)
+          } else {
+            res.setHeader('Content-Length', size)
+            createReadStream(file).pipe(res)
+          }
           return
         }
         next()
