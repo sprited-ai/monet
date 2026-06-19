@@ -51,6 +51,7 @@ export default function Preview() {
       {started ? (
         <Stage
           src={clipSrc(clip)}
+          seq={plays}
           onClipEnd={advance}
           blendMs={300}
           style={{ width: 'min(80vw, 80vh, 480px)', aspectRatio: '1 / 1' }}

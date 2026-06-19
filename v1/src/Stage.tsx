@@ -33,13 +33,14 @@ const HIDDEN_VIDEO: CSSProperties = {
 
 type Props = {
   src: string
+  seq?: number // bumps every advance — re-runs the load effect even if src repeats
   onClipEnd?: () => void
   blendMs?: number
   feather?: number
   style?: CSSProperties
 }
 
-export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, style }: Props) {
+export default function Stage({ src, seq = 0, onClipEnd, blendMs = 150, feather = 0.04, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const vRef = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)]
   const active = useRef(0) // slot currently playing / shown (0 or 1)
@@ -48,6 +49,7 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
   const mixFrom = useRef(0)
   const blendStart = useRef(0)
   const pending = useRef(-1) // slot a new clip is loading into (start blend when ready)
+  const endedFired = useRef(false) // guard: fire onClipEnd once per clip (poll-based)
   const first = useRef(true)
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
@@ -123,6 +125,16 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
           blendStart.current = now
           active.current = pending.current
           pending.current = -1
+          endedFired.current = false // new clip is now active — allow its end to fire
+        }
+      }
+      // Poll for the active clip ending (Safari drops 'ended'/'playing' events
+      // intermittently → the loop would freeze). Fire onClipEnd once per clip.
+      if (pending.current < 0 && !endedFired.current) {
+        const av = active.current === 0 ? a : b
+        if (av.ended || (av.duration > 0 && av.currentTime >= av.duration - 0.05)) {
+          endedFired.current = true
+          onEnd.current?.()
         }
       }
       // ease the blend toward its target
@@ -156,19 +168,8 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
     }
   }, [])
 
-  // `ended` on the active clip → tell the FSM to pick the next one.
-  useEffect(() => {
-    const handlers = vRef.map((r, slot) => {
-      const h = () => {
-        if (active.current === slot) onEnd.current?.()
-      }
-      r.current?.addEventListener('ended', h)
-      return h
-    })
-    return () => vRef.forEach((r, i) => r.current?.removeEventListener('ended', handlers[i]))
-  }, [])
-
-  // Load a new clip into the inactive slot and cross-dissolve to it.
+  // Load a new clip into the inactive slot and cross-dissolve to it. Keyed on `seq`
+  // (not `src`) so it re-runs on every advance even if the random pick repeats a clip.
   useEffect(() => {
     if (first.current) {
       first.current = false
@@ -184,7 +185,8 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
     v.load() // Safari won't refetch a reused (ended) element on a bare src swap → froze
     v.play().catch(() => {})
     pending.current = incoming // the draw loop blends to it once it's decoding
-  }, [src])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seq])
 
   return (
     <>
