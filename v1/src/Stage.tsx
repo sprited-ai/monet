@@ -48,7 +48,6 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
   const mixFrom = useRef(0)
   const blendStart = useRef(0)
   const pending = useRef(-1) // slot a new clip is loading into (start blend when ready)
-  const dbg = useRef<HTMLPreElement>(null) // on-screen diagnostics (Safari debugging)
   const first = useRef(true)
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
@@ -132,34 +131,21 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
         const e = t * t * (3 - 2 * t)
         mixVal.current = t >= 1 ? mixTarget.current : mixFrom.current + (mixTarget.current - mixFrom.current) * e
       }
-      let texErr = ''
-      try {
-        if (a.readyState >= 2) {
-          gl.activeTexture(gl.TEXTURE0)
-          gl.bindTexture(gl.TEXTURE_2D, texA)
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
-        }
-        if (b.readyState >= 2) {
-          gl.activeTexture(gl.TEXTURE1)
-          gl.bindTexture(gl.TEXTURE_2D, texB)
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
-        }
-      } catch (e) {
-        texErr = String((e as Error).name || e)
+      if (a.readyState >= 2) {
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, texA)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
+      }
+      if (b.readyState >= 2) {
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, texB)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
       }
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-      if (dbg.current) {
-        dbg.current.textContent =
-          `rs ${a.readyState}/${b.readyState}  pause ${+a.paused}/${+b.paused}` +
-          `  ct ${a.currentTime.toFixed(1)}/${b.currentTime.toFixed(1)}` +
-          `  err ${a.error?.code ?? 0}/${b.error?.code ?? 0}` +
-          `  cv ${cv.width}x${cv.height}  mix ${mixVal.current.toFixed(2)} act ${active.current}` +
-          `  gl ${gl.getError()}${texErr ? ' TEX:' + texErr : ''}`
-      }
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
@@ -188,13 +174,14 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
       first.current = false
       const v = vRef[0].current!
       v.src = src
+      v.load() // Safari needs an explicit load() after setting src
       v.play().catch(() => {})
       return
     }
     const incoming = 1 - active.current
     const v = vRef[incoming].current!
     v.src = src
-    v.currentTime = 0
+    v.load() // Safari won't refetch a reused (ended) element on a bare src swap → froze
     v.play().catch(() => {})
     pending.current = incoming // the draw loop blends to it once it's decoding
   }, [src])
@@ -206,23 +193,6 @@ export default function Stage({ src, onClipEnd, blendMs = 150, feather = 0.04, s
       <video ref={vRef[0]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <video ref={vRef[1]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <canvas ref={canvasRef} style={style} />
-      <pre
-        ref={dbg}
-        style={{
-          position: 'fixed',
-          top: 12,
-          right: 12,
-          margin: 0,
-          font: '11px ui-monospace, monospace',
-          background: '#000a',
-          color: '#0ff',
-          padding: '6px 8px',
-          borderRadius: 6,
-          pointerEvents: 'none',
-          whiteSpace: 'pre-wrap',
-          maxWidth: 360,
-        }}
-      />
     </>
   )
 }
