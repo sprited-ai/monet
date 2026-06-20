@@ -136,51 +136,45 @@ export default function Preview() {
         if (!playing) setSeq((s) => s + 1)
       }}
       style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#efe9e1',
-        backgroundImage: 'radial-gradient(circle at 50% 38%, #faf7f2, #e8e1d6)',
+        position: 'relative',
+        height: '100vh',
+        overflow: 'hidden',
+        backgroundColor: '#fdf3f6',
+        backgroundImage:
+          'linear-gradient(160deg, #ffe3ec 0%, #fff2cc 22%, #d9f7d0 45%, #d4f1ff 68%, #ece0ff 100%)',
       }}
     >
-      {/* Stage */}
-      <div style={{ flex: 1, display: 'grid', placeItems: 'center', position: 'relative' }}>
-        {current && (
-          <div
+      {/* Stage — fills the screen; canvas object-fit:contain keeps Monet undistorted */}
+      {current && (
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <Stage
+            src={clipSrc(current.key)}
+            seq={seq}
+            scale={geom(current.name).scale}
+            anchor={geom(current.name).anchor}
+            zoom={zoom}
+            onClipEnd={onClipEnd}
+            onPlaying={() => setPlaying(true)}
+            blendMs={300}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+          {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
+          <img
+            src={thumbSrc(current.key)}
+            alt={current.name}
             style={{
-              position: 'relative',
-              width: 'min(78vw, 64vh, 460px)',
-              aspectRatio: '1 / 1',
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              opacity: playing ? 0 : 1,
+              transition: 'opacity 300ms ease',
+              pointerEvents: 'none',
             }}
-          >
-            <Stage
-              src={clipSrc(current.key)}
-              seq={seq}
-              scale={geom(current.name).scale}
-              anchor={geom(current.name).anchor}
-              zoom={zoom}
-              onClipEnd={onClipEnd}
-              onPlaying={() => setPlaying(true)}
-              blendMs={300}
-              style={{ width: '100%', height: '100%' }}
-            />
-            {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
-            <img
-              src={thumbSrc(current.key)}
-              alt={current.name}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                opacity: playing ? 0 : 1,
-                transition: 'opacity 300ms ease',
-                pointerEvents: 'none',
-              }}
-            />
-          </div>
-        )}
+          />
+        </div>
+      )}
         {current && (
           <div
             style={{
@@ -201,13 +195,13 @@ export default function Preview() {
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            bottom: 12,
+            bottom: 120,
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: '#faf7f2cc',
+            background: '#ffffffcc',
             padding: '6px 12px',
             borderRadius: 999,
             font: '12px ui-monospace, monospace',
@@ -238,7 +232,6 @@ export default function Preview() {
             reset
           </button>
         </div>
-      </div>
 
       {/* Filmstrip — Photos.app style: the centered item is the selected one,
           emphasized with a white ring + soft shadow; neighbors shrink + dim; the
@@ -246,10 +239,13 @@ export default function Preview() {
       <div
         onPointerDown={(e) => e.stopPropagation()}
         style={{
-          position: 'relative',
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
           paddingTop: 18,
           paddingBottom: 'max(18px, env(safe-area-inset-bottom))',
-          background: 'rgba(250,247,242,0.6)',
+          background: 'rgba(255,255,255,0.5)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderTop: '1px solid #0001',
