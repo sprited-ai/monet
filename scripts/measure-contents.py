@@ -106,6 +106,16 @@ def main():
             fe["origin"] = [round(o[0] * W), round(o[1] * H)]  # seed (px)
         framings[fr] = fe
 
+    # Per-framing render scale (frame-derived): the character is the same absolute
+    # size in every framing, so a bigger frame = more zoomed-out → scale up to keep
+    # the character a constant on-screen size. Reference = regular (1.0). Display:
+    # zoom each clip by `scale`, anchored at its origin (feet), so Monet's size and
+    # baseline stay consistent across clips.
+    ref_h = framings.get("regular", {}).get("frame", [None, None])[1]
+    if ref_h:
+        for fr, fe in framings.items():
+            fe["scale"] = round(fe["frame"][1] / ref_h, 4)
+
     for p in files:
         name = p.stem
         framing = framing_of(name)

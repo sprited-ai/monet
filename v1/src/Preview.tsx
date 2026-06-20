@@ -7,6 +7,7 @@ import Stage from './Stage'
 // pick. (This is the manual browser; the autonomous FSM lives elsewhere.)
 
 type Item = { key: string; name: string; type: 'animation' | 'still' }
+type Framing = { frame: [number, number]; scale?: number; origin?: [number, number] }
 
 const clipSrc = (key: string) => `/contents/${key}`
 const thumbSrc = (key: string) => `/contents/${key.replace(/\.mp4$/, '.thumbnail.webp')}`
@@ -14,29 +15,57 @@ const pretty = (name: string) => name.replace(/^monet-/, '').replace(/-/g, ' ')
 
 const THUMB = 64 // filmstrip thumbnail size (px)
 const GAP = 8
+const DEFAULT_ANCHOR: [number, number] = [0.5, 0.87]
 
 export default function Preview() {
   const [clips, setClips] = useState<Item[]>([])
+  const [framings, setFramings] = useState<Record<string, Framing>>({})
+  const [framingOf, setFramingOf] = useState<Record<string, string>>({})
   const [sel, setSel] = useState(0) // index of the selected clip
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [awake, setAwake] = useState(false)
+  const [zoom, setZoom] = useState(1) // global user zoom multiplier
   const stripRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const scrollTimer = useRef<number>(0)
   const programmatic = useRef(false)
 
-  // Load the animation list once.
+  // Load the animation list + framing geometry once.
   useEffect(() => {
-    fetch('/contents')
-      .then((r) => r.json() as Promise<{ items: Item[] }>)
-      .then((d) => {
-        const anims = d.items.filter((i) => i.type === 'animation')
-        setClips(anims)
-        const idle = anims.findIndex((c) => c.name === 'monet-idle-1')
-        setSel(idle >= 0 ? idle : 0)
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch('/contents').then((r) => r.json() as Promise<{ items: Item[] }>),
+      fetch('/contents/framings.json')
+        .then((r) => r.json())
+        .catch(() => ({ framings: {} })),
+      fetch('/contents/index.json')
+        .then((r) => r.json())
+        .catch(() => ({ items: {} })),
+    ]).then(([list, fr, idx]) => {
+      const anims = list.items.filter((i) => i.type === 'animation')
+      setClips(anims)
+      setFramings(fr.framings ?? {})
+      const fmap: Record<string, string> = {}
+      for (const [name, e] of Object.entries(idx.items ?? {}) as [string, any][]) {
+        if (e.framing) fmap[name] = e.framing
+      }
+      setFramingOf(fmap)
+      const idle = anims.findIndex((c) => c.name === 'monet-idle-1')
+      setSel(idle >= 0 ? idle : 0)
+    })
   }, [])
+
+  // Per-clip render scale + anchor (feet), from its framing.
+  const geom = useCallback(
+    (name: string): { scale: number; anchor: [number, number] } => {
+      const f = framings[framingOf[name]]
+      if (!f) return { scale: 1, anchor: DEFAULT_ANCHOR }
+      const anchor: [number, number] = f.origin
+        ? [f.origin[0] / f.frame[0], f.origin[1] / f.frame[1]]
+        : DEFAULT_ANCHOR
+      return { scale: f.scale ?? 1, anchor }
+    },
+    [framings, framingOf],
+  )
 
   // Center a strip item (used on select / initial).
   const centerItem = useCallback((i: number, smooth = true) => {
@@ -116,6 +145,9 @@ export default function Preview() {
             <Stage
               src={clipSrc(current.key)}
               seq={seq}
+              scale={geom(current.name).scale}
+              anchor={geom(current.name).anchor}
+              zoom={zoom}
               onClipEnd={onClipEnd}
               blendMs={300}
               style={{ width: 'min(78vw, 64vh, 460px)', aspectRatio: '1 / 1' }}
@@ -169,6 +201,50 @@ export default function Preview() {
             }}
           >
             {pretty(current.name)}
+          </div>
+        )}
+
+        {/* Zoom control */}
+        {awake && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#faf7f2cc',
+              padding: '6px 12px',
+              borderRadius: 999,
+              font: '12px ui-monospace, monospace',
+              color: '#6b5f54',
+            }}
+          >
+            <span>zoom</span>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              style={{ width: 160 }}
+            />
+            <span style={{ width: 34, textAlign: 'right' }}>{zoom.toFixed(2)}×</span>
+            <button
+              onClick={() => setZoom(1)}
+              style={{
+                border: 0,
+                background: 'transparent',
+                cursor: 'pointer',
+                color: '#c0392b',
+                font: 'inherit',
+              }}
+            >
+              reset
+            </button>
           </div>
         )}
       </div>

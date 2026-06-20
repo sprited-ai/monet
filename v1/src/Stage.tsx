@@ -8,16 +8,23 @@ import type { CSSProperties } from 'react'
 // fades in over it. See docs/008-video-rendering.md.
 
 const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.-p.y)/2.);gl_Position=vec4(p,0.,1.);}`
+// Per-slot scale + anchor normalize the character's on-screen size across framings
+// (a bigger frame = more zoomed-out → scale>1 magnifies it back). The anchor (feet)
+// is the fixed point so Monet stays grounded while scaling. `zoom` is a global user
+// multiplier. Sampling outside the frame is transparent (no edge smear).
 const FS = `precision mediump float;varying vec2 uv;
-uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;
-vec4 stk(sampler2D t){vec3 rgb=texture2D(t,vec2(uv.x,uv.y*0.5)).rgb;
-float a=texture2D(t,vec2(uv.x,0.5+uv.y*0.5)).r;return vec4(rgb,a);}
-void main(){
-  vec4 c=mix(stk(tA),stk(tB),mixv);                       // slot0 → slot1
-  float e=smoothstep(0.0,fw,uv.x)*smoothstep(0.0,fw,1.0-uv.x)
-        *smoothstep(0.0,fw,uv.y)*smoothstep(0.0,fw,1.0-uv.y);
-  gl_FragColor=vec4(c.rgb,c.a*e);
-}`
+uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;uniform float zoom;
+uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;
+vec4 stk(sampler2D t,vec2 anc,float scl){
+  vec2 u=anc+(uv-anc)/(scl*zoom);
+  if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
+  vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
+  float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
+  float e=smoothstep(0.0,fw,u.x)*smoothstep(0.0,fw,1.0-u.x)
+        *smoothstep(0.0,fw,u.y)*smoothstep(0.0,fw,1.0-u.y);
+  return vec4(rgb,a*e);
+}
+void main(){ gl_FragColor=mix(stk(tA,ancA,sclA),stk(tB,ancB,sclB),mixv); }`
 
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
 // it stays blank. Keep the source element in the render tree but tiny + transparent.
@@ -34,6 +41,9 @@ const HIDDEN_VIDEO: CSSProperties = {
 type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
+  scale?: number // framing render scale (regular = 1; large ≈ 1.3, etc.)
+  anchor?: [number, number] // framing origin (feet), normalized — fixed point when scaling
+  zoom?: number // global user zoom multiplier
   onClipEnd?: () => void
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
@@ -44,6 +54,9 @@ type Props = {
 export default function Stage({
   src,
   seq = 0,
+  scale = 1,
+  anchor = [0.5, 0.87],
+  zoom = 1,
   onClipEnd,
   onPlaying,
   blendMs = 150,
@@ -61,6 +74,10 @@ export default function Stage({
   const endedFired = useRef(false) // guard: fire onClipEnd once per clip (poll-based)
   const first = useRef(true)
   const playingFired = useRef(false) // fire onPlaying once, when the first frame shows
+  const slotScale = useRef<[number, number]>([scale, scale]) // per-slot framing scale
+  const slotAnchor = useRef<[[number, number], [number, number]]>([anchor, anchor])
+  const cur = useRef({ scale, anchor, zoom }) // latest props for the load effect
+  cur.current = { scale, anchor, zoom }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
@@ -112,6 +129,11 @@ export default function Stage({
     gl.uniform1i(gl.getUniformLocation(pr, 'tB'), 1)
     gl.uniform1f(gl.getUniformLocation(pr, 'fw'), Math.max(0.0001, feather))
     const mixLoc = gl.getUniformLocation(pr, 'mixv')
+    const zoomLoc = gl.getUniformLocation(pr, 'zoom')
+    const ancALoc = gl.getUniformLocation(pr, 'ancA')
+    const sclALoc = gl.getUniformLocation(pr, 'sclA')
+    const ancBLoc = gl.getUniformLocation(pr, 'ancB')
+    const sclBLoc = gl.getUniformLocation(pr, 'sclB')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
     const sizeCanvas = () => {
@@ -167,6 +189,11 @@ export default function Stage({
       }
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
+      gl.uniform1f(zoomLoc, cur.current.zoom)
+      gl.uniform2fv(ancALoc, slotAnchor.current[0])
+      gl.uniform1f(sclALoc, slotScale.current[0])
+      gl.uniform2fv(ancBLoc, slotAnchor.current[1])
+      gl.uniform1f(sclBLoc, slotScale.current[1])
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
@@ -192,6 +219,8 @@ export default function Stage({
   useEffect(() => {
     if (first.current) {
       first.current = false
+      slotScale.current[0] = cur.current.scale
+      slotAnchor.current[0] = cur.current.anchor
       const v = vRef[0].current!
       v.src = src
       v.load() // Safari needs an explicit load() after setting src
@@ -199,6 +228,8 @@ export default function Stage({
       return
     }
     const incoming = 1 - active.current
+    slotScale.current[incoming] = cur.current.scale // this clip's framing scale/anchor
+    slotAnchor.current[incoming] = cur.current.anchor
     const v = vRef[incoming].current!
     v.src = src
     v.load() // Safari won't refetch a reused (ended) element on a bare src swap → froze
