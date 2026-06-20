@@ -35,12 +35,21 @@ type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
   onClipEnd?: () => void
+  onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
   feather?: number
   style?: CSSProperties
 }
 
-export default function Stage({ src, seq = 0, onClipEnd, blendMs = 150, feather = 0.04, style }: Props) {
+export default function Stage({
+  src,
+  seq = 0,
+  onClipEnd,
+  onPlaying,
+  blendMs = 150,
+  feather = 0.04,
+  style,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const vRef = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)]
   const active = useRef(0) // slot currently playing / shown (0 or 1)
@@ -51,8 +60,11 @@ export default function Stage({ src, seq = 0, onClipEnd, blendMs = 150, feather 
   const pending = useRef(-1) // slot a new clip is loading into (start blend when ready)
   const endedFired = useRef(false) // guard: fire onClipEnd once per clip (poll-based)
   const first = useRef(true)
+  const playingFired = useRef(false) // fire onPlaying once, when the first frame shows
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
+  const onPlay = useRef(onPlaying)
+  onPlay.current = onPlaying
 
   // GL setup + draw loop (two video textures, mixed by `mixv`).
   useEffect(() => {
@@ -158,6 +170,13 @@ export default function Stage({ src, seq = 0, onClipEnd, blendMs = 150, feather 
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      if (!playingFired.current) {
+        const av = active.current === 0 ? a : b
+        if (av.readyState >= 2 && av.currentTime > 0) {
+          playingFired.current = true
+          onPlay.current?.()
+        }
+      }
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
