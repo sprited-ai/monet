@@ -23,7 +23,7 @@ export default function Preview() {
   const [framingOf, setFramingOf] = useState<Record<string, string>>({})
   const [sel, setSel] = useState(0) // index of the selected clip
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
-  const [awake, setAwake] = useState(false)
+  const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(1) // global user zoom multiplier
   const stripRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -130,6 +130,11 @@ export default function Preview() {
 
   return (
     <div
+      // Tap anywhere is a fallback to start playback if muted-autoplay was blocked
+      // (e.g. iOS Low Power Mode). When autoplay works, nothing to tap.
+      onPointerDown={() => {
+        if (!playing) setSeq((s) => s + 1)
+      }}
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -140,8 +145,14 @@ export default function Preview() {
     >
       {/* Stage */}
       <div style={{ flex: 1, display: 'grid', placeItems: 'center', position: 'relative' }}>
-        {current &&
-          (awake ? (
+        {current && (
+          <div
+            style={{
+              position: 'relative',
+              width: 'min(78vw, 64vh, 460px)',
+              aspectRatio: '1 / 1',
+            }}
+          >
             <Stage
               src={clipSrc(current.key)}
               seq={seq}
@@ -149,46 +160,27 @@ export default function Preview() {
               anchor={geom(current.name).anchor}
               zoom={zoom}
               onClipEnd={onClipEnd}
+              onPlaying={() => setPlaying(true)}
               blendMs={300}
-              style={{ width: 'min(78vw, 64vh, 460px)', aspectRatio: '1 / 1' }}
+              style={{ width: '100%', height: '100%' }}
             />
-          ) : (
-            <button
-              onClick={() => {
-                setAwake(true)
-                setSeq((s) => s + 1)
-              }}
+            {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
+            <img
+              src={thumbSrc(current.key)}
+              alt={current.name}
               style={{
-                position: 'relative',
-                width: 'min(78vw, 64vh, 460px)',
-                aspectRatio: '1 / 1',
-                border: 0,
-                background: 'transparent',
-                cursor: 'pointer',
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: playing ? 0 : 1,
+                transition: 'opacity 300ms ease',
+                pointerEvents: 'none',
               }}
-            >
-              <img
-                src={thumbSrc(current.key)}
-                alt={current.name}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: 24,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  font: '14px ui-monospace, monospace',
-                  color: '#5a5048',
-                  background: '#faf7f2cc',
-                  padding: '6px 14px',
-                  borderRadius: 999,
-                }}
-              >
-                ▶ tap to wake Monet
-              </span>
-            </button>
-          ))}
+            />
+          </div>
+        )}
         {current && (
           <div
             style={{
@@ -205,67 +197,64 @@ export default function Preview() {
         )}
 
         {/* Zoom control */}
-        {awake && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              background: '#faf7f2cc',
-              padding: '6px 12px',
-              borderRadius: 999,
-              font: '12px ui-monospace, monospace',
-              color: '#6b5f54',
-            }}
-          >
-            <span>zoom</span>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.01}
-              value={zoom}
-              onChange={(e) => setZoom(parseFloat(e.target.value))}
-              style={{ width: 160 }}
-            />
-            <span style={{ width: 34, textAlign: 'right' }}>{zoom.toFixed(2)}×</span>
-            <button
-              onClick={() => setZoom(1)}
-              style={{
-                border: 0,
-                background: 'transparent',
-                cursor: 'pointer',
-                color: '#c0392b',
-                font: 'inherit',
-              }}
-            >
-              reset
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Filmstrip */}
-      <div style={{ position: 'relative', paddingBottom: 20 }}>
-        {/* center marker */}
         <div
+          onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
+            bottom: 12,
             left: '50%',
-            top: 6,
-            bottom: 20,
-            width: THUMB + 6,
             transform: 'translateX(-50%)',
-            border: '2px solid #c0392b',
-            borderRadius: 12,
-            pointerEvents: 'none',
-            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: '#faf7f2cc',
+            padding: '6px 12px',
+            borderRadius: 999,
+            font: '12px ui-monospace, monospace',
+            color: '#6b5f54',
           }}
-        />
+        >
+          <span>zoom</span>
+          <input
+            type="range"
+            min={0.5}
+            max={2}
+            step={0.01}
+            value={zoom}
+            onChange={(e) => setZoom(parseFloat(e.target.value))}
+            style={{ width: 160 }}
+          />
+          <span style={{ width: 34, textAlign: 'right' }}>{zoom.toFixed(2)}×</span>
+          <button
+            onClick={() => setZoom(1)}
+            style={{
+              border: 0,
+              background: 'transparent',
+              cursor: 'pointer',
+              color: '#c0392b',
+              font: 'inherit',
+            }}
+          >
+            reset
+          </button>
+        </div>
+      </div>
+
+      {/* Filmstrip — Photos.app style: the centered item is the selected one,
+          emphasized with a white ring + soft shadow; neighbors shrink + dim; the
+          strip fades out at both edges. No marker chrome. */}
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          paddingTop: 18,
+          paddingBottom: 'max(18px, env(safe-area-inset-bottom))',
+          background: 'rgba(250,247,242,0.6)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderTop: '1px solid #0001',
+        }}
+      >
         <div
           ref={stripRef}
           onScroll={onScroll}
@@ -273,43 +262,60 @@ export default function Preview() {
             display: 'flex',
             gap: GAP,
             overflowX: 'auto',
+            overflowY: 'hidden',
             scrollSnapType: 'x mandatory',
-            padding: `8px calc(50vw - ${THUMB / 2}px)`,
+            padding: `10px calc(50% - ${THUMB / 2}px)`,
             scrollbarWidth: 'none',
+            WebkitMaskImage:
+              'linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent)',
+            maskImage: 'linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent)',
           }}
         >
-          {clips.map((c, i) => (
-            <button
-              key={c.key}
-              ref={(el) => {
-                itemRefs.current[i] = el
-              }}
-              onClick={() => choose(i)}
-              title={pretty(c.name)}
-              style={{
-                flex: `0 0 ${THUMB}px`,
-                width: THUMB,
-                height: THUMB,
-                padding: 0,
-                border: 0,
-                borderRadius: 10,
-                overflow: 'hidden',
-                scrollSnapAlign: 'center',
-                cursor: 'pointer',
-                background: '#fff6',
-                opacity: i === sel ? 1 : 0.5,
-                transform: i === sel ? 'scale(1)' : 'scale(0.86)',
-                transition: 'opacity 160ms ease, transform 160ms ease',
-              }}
-            >
-              <img
-                src={thumbSrc(c.key)}
-                alt={c.name}
-                loading="lazy"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              />
-            </button>
-          ))}
+          {clips.map((c, i) => {
+            const on = i === sel
+            return (
+              <button
+                key={c.key}
+                ref={(el) => {
+                  itemRefs.current[i] = el
+                }}
+                onClick={() => choose(i)}
+                title={pretty(c.name)}
+                style={{
+                  flex: `0 0 ${THUMB}px`,
+                  width: THUMB,
+                  height: THUMB,
+                  padding: 0,
+                  border: 0,
+                  borderRadius: 14,
+                  overflow: 'visible',
+                  scrollSnapAlign: 'center',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  opacity: on ? 1 : 0.46,
+                  transform: on ? 'scale(1.12)' : 'scale(0.82)',
+                  transition: 'opacity 200ms ease, transform 200ms cubic-bezier(.2,.7,.2,1)',
+                }}
+              >
+                <img
+                  src={thumbSrc(c.key)}
+                  alt={c.name}
+                  loading="lazy"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    borderRadius: 14,
+                    background: '#fff7',
+                    boxShadow: on
+                      ? '0 0 0 3px #fff, 0 6px 16px rgba(40,30,20,0.22)'
+                      : '0 0 0 1px #0001',
+                    transition: 'box-shadow 200ms ease',
+                  }}
+                />
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
