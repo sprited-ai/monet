@@ -46,6 +46,12 @@
       (per-project subdomain; keep `assets.sprited.ai` free for a future router).
 - [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
 - [ ] Wire animation playback from R2; idle loop + state transitions.
+- [ ] **Re-render `monet-jump-large-3`** — bad generative render: heavy temporal flicker on the
+      character body (per-pixel temporal 2nd-diff = 15.4 vs 5.5/6.4 for the clean siblings -1/-2;
+      36% of frames reverse brightness direction; a luma flash to 48 at frames ~40–52, jitter tail
+      at 110–118). Flicker is baked into the **source webm**, not the mp4 transcode. Post-process
+      deflicker (`atadenoise`+`deflicker`) fixes only 57% of global pumping / 7% of local flicker —
+      band-aid. Siblings are clean, so the pipeline is fine; regenerate -3 (new seed) or drop it.
 
 ## Experiments
 
