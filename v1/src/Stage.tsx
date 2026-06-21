@@ -14,13 +14,22 @@ const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.
 // multiplier. Sampling outside the frame is transparent (no edge smear).
 const FS = `precision mediump float;varying vec2 uv;
 uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;uniform float zoom;
-uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;
+uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;uniform vec2 base;
+// anc = where the feet are in THIS clip's frame (per framing). base = the fixed
+// screen point the feet sit at, same for every clip. Mapping screen→texture as
+// anc + (uv - base)/scale lands every framing's feet on the same screen baseline,
+// so Monet doesn't jump position when the framing changes.
 vec4 stk(sampler2D t,vec2 anc,float scl){
-  vec2 u=anc+(uv-anc)/(scl*zoom);
+  vec2 u=anc+(uv-base)/(scl*zoom);
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
-  return vec4(rgb,a);
+  // Feather on the VIDEO RECT (frame coords u), not the render box — content near
+  // the clip's own frame border softens. A property of the video, so it follows
+  // scale/zoom with the frame rather than the viewport.
+  float e=smoothstep(0.0,fw,u.x)*smoothstep(0.0,fw,1.0-u.x)
+        *smoothstep(0.0,fw,u.y)*smoothstep(0.0,fw,1.0-u.y);
+  return vec4(rgb,a*e);
 }
 void main(){
   vec4 a=stk(tA,ancA,sclA), b=stk(tB,ancB,sclB);
@@ -30,12 +39,7 @@ void main(){
   // nothing, so i2's true rgb fades in cleanly. Un-premultiply for the
   // straight-alpha buffer (premultipliedAlpha:false).
   vec4 m=mix(vec4(a.rgb*a.a,a.a), vec4(b.rgb*b.a,b.a), mixv);
-  vec3 rgb = m.a>0.0001 ? m.rgb/m.a : vec3(0.0);
-  // Feather on the DISPLAY edges (canvas uv) so content reaching the viewport
-  // border softens instead of hard-clipping — independent of scale/zoom.
-  float e=smoothstep(0.0,fw,uv.x)*smoothstep(0.0,fw,1.0-uv.x)
-        *smoothstep(0.0,fw,uv.y)*smoothstep(0.0,fw,1.0-uv.y);
-  gl_FragColor = vec4(rgb, m.a*e);
+  gl_FragColor = m.a>0.0001 ? vec4(m.rgb/m.a, m.a) : vec4(0.0);
 }`
 
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
@@ -54,7 +58,8 @@ type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
   scale?: number // framing render scale (regular = 1; large ≈ 1.3, etc.)
-  anchor?: [number, number] // framing origin (feet), normalized — fixed point when scaling
+  anchor?: [number, number] // framing origin (feet) in the frame, normalized
+  baseline?: [number, number] // fixed screen point the feet sit at, all clips
   zoom?: number // global user zoom multiplier
   onClipEnd?: () => void
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
@@ -68,6 +73,7 @@ export default function Stage({
   seq = 0,
   scale = 1,
   anchor = [0.5, 0.87],
+  baseline = [0.5, 0.87],
   zoom = 1,
   onClipEnd,
   onPlaying,
@@ -88,8 +94,8 @@ export default function Stage({
   const playingFired = useRef(false) // fire onPlaying once, when the first frame shows
   const slotScale = useRef<[number, number]>([scale, scale]) // per-slot framing scale
   const slotAnchor = useRef<[[number, number], [number, number]]>([anchor, anchor])
-  const cur = useRef({ scale, anchor, zoom }) // latest props for the load effect
-  cur.current = { scale, anchor, zoom }
+  const cur = useRef({ scale, anchor, baseline, zoom }) // latest props for the loop
+  cur.current = { scale, anchor, baseline, zoom }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
@@ -146,6 +152,7 @@ export default function Stage({
     const sclALoc = gl.getUniformLocation(pr, 'sclA')
     const ancBLoc = gl.getUniformLocation(pr, 'ancB')
     const sclBLoc = gl.getUniformLocation(pr, 'sclB')
+    const baseLoc = gl.getUniformLocation(pr, 'base')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
     const sizeCanvas = () => {
@@ -202,6 +209,7 @@ export default function Stage({
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
       gl.uniform1f(zoomLoc, cur.current.zoom)
+      gl.uniform2fv(baseLoc, cur.current.baseline)
       gl.uniform2fv(ancALoc, slotAnchor.current[0])
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
