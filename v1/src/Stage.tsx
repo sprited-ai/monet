@@ -24,7 +24,16 @@ vec4 stk(sampler2D t,vec2 anc,float scl){
         *smoothstep(0.0,fw,u.y)*smoothstep(0.0,fw,1.0-u.y);
   return vec4(rgb,a*e);
 }
-void main(){ gl_FragColor=mix(stk(tA,ancA,sclA),stk(tB,ancB,sclB),mixv); }`
+void main(){
+  vec4 a=stk(tA,ancA,sclA), b=stk(tB,ancB,sclB);
+  // Cross-dissolve in PREMULTIPLIED space: a transparent texel (a==0) carries
+  // garbage rgb under it, so mixing straight-alpha drags i2's color toward that
+  // garbage and only reaches alpha=mixv. Premultiplying makes a==0 contribute
+  // nothing, so i2's true rgb fades in cleanly. Un-premultiply for the
+  // straight-alpha buffer (premultipliedAlpha:false).
+  vec4 m=mix(vec4(a.rgb*a.a,a.a), vec4(b.rgb*b.a,b.a), mixv);
+  gl_FragColor = m.a>0.0001 ? vec4(m.rgb/m.a, m.a) : vec4(0.0);
+}`
 
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
 // it stays blank. Keep the source element in the render tree but tiny + transparent.

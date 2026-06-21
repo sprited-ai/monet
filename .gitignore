@@ -177,3 +177,7 @@ contents/monet/pose_out/
 .playwright-mcp/
 
 contents/monet/source/
+
+# scratch analysis renders
+/idle*-compare.mp4
+contents/monet/archived/sample_animated_webp.webp
