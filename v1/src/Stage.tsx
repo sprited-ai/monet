@@ -20,9 +20,7 @@ vec4 stk(sampler2D t,vec2 anc,float scl){
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
-  float e=smoothstep(0.0,fw,u.x)*smoothstep(0.0,fw,1.0-u.x)
-        *smoothstep(0.0,fw,u.y)*smoothstep(0.0,fw,1.0-u.y);
-  return vec4(rgb,a*e);
+  return vec4(rgb,a);
 }
 void main(){
   vec4 a=stk(tA,ancA,sclA), b=stk(tB,ancB,sclB);
@@ -32,7 +30,12 @@ void main(){
   // nothing, so i2's true rgb fades in cleanly. Un-premultiply for the
   // straight-alpha buffer (premultipliedAlpha:false).
   vec4 m=mix(vec4(a.rgb*a.a,a.a), vec4(b.rgb*b.a,b.a), mixv);
-  gl_FragColor = m.a>0.0001 ? vec4(m.rgb/m.a, m.a) : vec4(0.0);
+  vec3 rgb = m.a>0.0001 ? m.rgb/m.a : vec3(0.0);
+  // Feather on the DISPLAY edges (canvas uv) so content reaching the viewport
+  // border softens instead of hard-clipping — independent of scale/zoom.
+  float e=smoothstep(0.0,fw,uv.x)*smoothstep(0.0,fw,1.0-uv.x)
+        *smoothstep(0.0,fw,uv.y)*smoothstep(0.0,fw,1.0-uv.y);
+  gl_FragColor = vec4(rgb, m.a*e);
 }`
 
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by

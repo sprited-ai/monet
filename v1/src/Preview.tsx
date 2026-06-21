@@ -25,10 +25,20 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(1) // global user zoom multiplier
+  const [barH, setBarH] = useState(132) // filmstrip bar height (stage sits above it)
   const stripRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const scrollTimer = useRef<number>(0)
   const programmatic = useRef(false)
+
+  // Keep the stage area sized above the filmstrip so Monet never leaks under it.
+  useEffect(() => {
+    const measure = () => barRef.current && setBarH(barRef.current.offsetHeight)
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [clips.length])
 
   // Load the animation list + framing geometry once.
   useEffect(() => {
@@ -144,9 +154,10 @@ export default function Preview() {
           'linear-gradient(160deg, #ffe3ec 0%, #fff2cc 22%, #d9f7d0 45%, #d4f1ff 68%, #ece0ff 100%)',
       }}
     >
-      {/* Stage — fills the screen; canvas object-fit:contain keeps Monet undistorted */}
+      {/* Stage — fills the screen above the filmstrip; canvas object-fit:contain
+          keeps Monet undistorted and fully visible (never under the strip). */}
       {current && (
-        <div style={{ position: 'absolute', inset: 0 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barH }}>
           <Stage
             src={clipSrc(current.key)}
             seq={seq}
@@ -195,7 +206,7 @@ export default function Preview() {
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            bottom: 120,
+            bottom: barH + 12,
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'flex',
@@ -237,6 +248,7 @@ export default function Preview() {
           emphasized with a white ring + soft shadow; neighbors shrink + dim; the
           strip fades out at both edges. No marker chrome. */}
       <div
+        ref={barRef}
         onPointerDown={(e) => e.stopPropagation()}
         style={{
           position: 'absolute',
