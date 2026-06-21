@@ -15,15 +15,19 @@ const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.
 const FS = `precision mediump float;varying vec2 uv;
 uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;uniform float zoom;
 uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;uniform vec2 base;uniform float aspect;
+uniform float fasA;uniform float fasB; // per-slot frame aspect (frameW/frameH)
 // anc = where the feet are in THIS clip's frame (per framing). base = the fixed
 // screen point the feet sit at, same for every clip. The canvas matches the
 // viewport rect (not the square frame); aspect = canvasW/canvasH keeps texels
 // square (no distortion) and lets a wide viewport show MORE of the frame's sides
 // instead of cropping them. Vertical fit drives scale; horizontal just fills the
 // extra width. Feet land on the same screen baseline regardless of framing.
-vec4 stk(sampler2D t,vec2 anc,float scl){
+vec4 stk(sampler2D t,vec2 anc,float scl,float fas){
   float k=scl*zoom;
-  vec2 u=vec2(anc.x+(uv.x-0.5)*aspect/k, anc.y+(uv.y-base.y)/k);
+  // Divide x by the clip's OWN frame aspect (frameW/frameH). aspect corrects for
+  // the canvas shape; without /fas, a non-square frame (wide=1.74) gets squished in
+  // x by frameH/frameW → character too thin. Square frames (fas=1) are unchanged.
+  vec2 u=vec2(anc.x+(uv.x-0.5)*aspect/(k*fas), anc.y+(uv.y-base.y)/k);
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
@@ -35,7 +39,7 @@ vec4 stk(sampler2D t,vec2 anc,float scl){
   return vec4(rgb,a*e);
 }
 void main(){
-  vec4 a=stk(tA,ancA,sclA), b=stk(tB,ancB,sclB);
+  vec4 a=stk(tA,ancA,sclA,fasA), b=stk(tB,ancB,sclB,fasB);
   // Cross-dissolve in PREMULTIPLIED space: a transparent texel (a==0) carries
   // garbage rgb under it, so mixing straight-alpha drags i2's color toward that
   // garbage and only reaches alpha=mixv. Premultiplying makes a==0 contribute
@@ -68,6 +72,10 @@ type Props = {
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
   feather?: number
+  // Test hook: instead of playing, seek to this time (s) and hold the frame, so a
+  // screenshot of the WebGL render is deterministic (no frame-timing flake). The
+  // canvas gets data-ready="1" once the seeked frame is decoded AND drawn.
+  freezeAt?: number
   style?: CSSProperties
 }
 
@@ -82,6 +90,7 @@ export default function Stage({
   onPlaying,
   blendMs = 150,
   feather = 0.04,
+  freezeAt,
   style,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -95,6 +104,7 @@ export default function Stage({
   const endedFired = useRef(false) // guard: fire onClipEnd once per clip (poll-based)
   const first = useRef(true)
   const playingFired = useRef(false) // fire onPlaying once, when the first frame shows
+  const frozenSeeked = useRef(false) // test freeze: the seek to freezeAt has landed
   const slotScale = useRef<[number, number]>([scale, scale]) // per-slot framing scale
   const slotAnchor = useRef<[[number, number], [number, number]]>([anchor, anchor])
   const cur = useRef({ scale, anchor, baseline, zoom }) // latest props for the loop
@@ -111,7 +121,15 @@ export default function Stage({
     const b = vRef[1].current!
     a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
     b.muted = true
-    const gl = cv.getContext('webgl', { premultipliedAlpha: false, alpha: true })
+    // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
+    // capture after the buffer is composited+cleared, blanking the canvas. Keeping
+    // the buffer makes the frozen frame survive any capture path. Off in normal use
+    // (lets the compositor drop the buffer each frame).
+    const gl = cv.getContext('webgl', {
+      premultipliedAlpha: false,
+      alpha: true,
+      preserveDrawingBuffer: freezeAt != null,
+    })
     if (!gl) return
     const sh = (t: number, s: string) => {
       const o = gl.createShader(t)!
@@ -157,6 +175,8 @@ export default function Stage({
     const sclBLoc = gl.getUniformLocation(pr, 'sclB')
     const baseLoc = gl.getUniformLocation(pr, 'base')
     const aspectLoc = gl.getUniformLocation(pr, 'aspect')
+    const fasALoc = gl.getUniformLocation(pr, 'fasA')
+    const fasBLoc = gl.getUniformLocation(pr, 'fasB')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
     // Size the backing buffer to the DISPLAY rect (not the clip's 640² frame), so a
@@ -224,6 +244,11 @@ export default function Stage({
       gl.uniform1f(zoomLoc, cur.current.zoom)
       gl.uniform2fv(baseLoc, cur.current.baseline)
       gl.uniform1f(aspectLoc, aspect)
+      // per-slot frame aspect (frameW / color-frameH); color is the top half, so /2.
+      // Read live from the video so a reused slot picks up its new clip's shape.
+      const fa = (v: HTMLVideoElement) => (v.videoWidth && v.videoHeight ? v.videoWidth / (v.videoHeight / 2) : 1)
+      gl.uniform1f(fasALoc, fa(a))
+      gl.uniform1f(fasBLoc, fa(b))
       gl.uniform2fv(ancALoc, slotAnchor.current[0])
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
@@ -233,8 +258,13 @@ export default function Stage({
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       if (!playingFired.current) {
         const av = active.current === 0 ? a : b
-        if (av.readyState >= 2 && av.currentTime > 0) {
+        // Frozen: ready once the seek landed (frame decoded) and we've drawn it.
+        // Live: ready once playback advances past 0. Either way the frame on screen
+        // now is the one a screenshot will capture, so flag the canvas.
+        const ready = freezeAt != null ? frozenSeeked.current && av.readyState >= 2 : av.readyState >= 2 && av.currentTime > 0
+        if (ready) {
           playingFired.current = true
+          cv.dataset.ready = '1'
           onPlay.current?.()
         }
       }
@@ -251,6 +281,16 @@ export default function Stage({
   // Load a new clip into the inactive slot and cross-dissolve to it. Keyed on `seq`
   // (not `src`) so it re-runs on every advance even if the random pick repeats a clip.
   useEffect(() => {
+    // Test freeze: seek to freezeAt and hold (don't play), so the render is a stable
+    // single frame. Wire it on whichever element we're about to load into.
+    const freeze = (v: HTMLVideoElement) => {
+      frozenSeeked.current = false
+      const seek = () => {
+        v.currentTime = Math.max(0.01, freezeAt!)
+      }
+      v.addEventListener('loadeddata', seek, { once: true })
+      v.addEventListener('seeked', () => (frozenSeeked.current = true), { once: true })
+    }
     if (first.current) {
       first.current = false
       slotScale.current[0] = cur.current.scale
@@ -258,7 +298,8 @@ export default function Stage({
       const v = vRef[0].current!
       v.src = src
       v.load() // Safari needs an explicit load() after setting src
-      v.play().catch(() => {})
+      if (freezeAt != null) freeze(v)
+      else v.play().catch(() => {})
       return
     }
     const incoming = 1 - active.current
@@ -267,7 +308,8 @@ export default function Stage({
     const v = vRef[incoming].current!
     v.src = src
     v.load() // Safari won't refetch a reused (ended) element on a bare src swap → froze
-    v.play().catch(() => {})
+    if (freezeAt != null) freeze(v)
+    else v.play().catch(() => {})
     pending.current = incoming // the draw loop blends to it once it's decoding
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq])

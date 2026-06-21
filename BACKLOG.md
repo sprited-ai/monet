@@ -32,6 +32,11 @@
       (native size, q90) for the grid; `WebGL StackedVideo` composite on hover. Editor draws an
       origin crosshair. Pipeline (worker/middleware/measure/sync) switched .webm→.mp4; sync honors
       `.gitignore`. Internal dirs `source|pose_out|archived` + `*.thumbnail.*` hidden from `/contents`.
+- [x] **Screenshot (visual-regression) tests** — Playwright over `/`, `/editor`, `/preview`.
+      Animated WebGL stage made deterministic via `?test=1` (Stage `freezeAt` seeks+holds a single
+      frame, sets canvas `data-ready`; `preserveDrawingBuffer` only in test so full-page captures
+      aren't blank). Preview-wide/zoom lock the viewport-rect fix (no side crop, no distortion).
+      Baselines in `v1/tests/__screenshots__`. `pnpm test` / `pnpm test:update`.
 - [ ] **Editor: keyframe thumbnail picker** (later) — scrub a clip, pick the frame, save it as
       `<name>.thumbnail.webp` (native size, so it just swaps which frame). Local-generated for now.
 - [ ] **Sidecar `<name>.json`** (not started) — hand-authored loop {in,out}, name, kind, tags.

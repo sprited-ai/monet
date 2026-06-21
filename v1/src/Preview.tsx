@@ -17,6 +17,19 @@ const THUMB = 64 // filmstrip thumbnail size (px)
 const GAP = 8
 const DEFAULT_ANCHOR: [number, number] = [0.5, 0.87]
 
+// Deterministic test mode (for screenshot tests). `?test=1` freezes the stage on a
+// single seeked frame; `clip` picks which animation, `t` the seek time, `zoom` the
+// initial zoom. Off in normal use.
+const TEST = (() => {
+  const p = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
+  if (p.get('test') !== '1') return null
+  return {
+    clip: p.get('clip'),
+    freezeAt: parseFloat(p.get('t') ?? '0.4'),
+    zoom: p.get('zoom') ? parseFloat(p.get('zoom')!) : 1,
+  }
+})()
+
 export default function Preview() {
   const [clips, setClips] = useState<Item[]>([])
   const [framings, setFramings] = useState<Record<string, Framing>>({})
@@ -24,7 +37,7 @@ export default function Preview() {
   const [sel, setSel] = useState(0) // index of the selected clip
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
-  const [zoom, setZoom] = useState(1) // global user zoom multiplier
+  const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
   const [barH, setBarH] = useState(132) // filmstrip bar height (stage sits above it)
   const stripRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -59,8 +72,9 @@ export default function Preview() {
         if (e.framing) fmap[name] = e.framing
       }
       setFramingOf(fmap)
-      const idle = anims.findIndex((c) => c.name === 'monet-idle-1')
-      setSel(idle >= 0 ? idle : 0)
+      const want = TEST?.clip ?? 'monet-idle-1'
+      const start = anims.findIndex((c) => c.name === want)
+      setSel(start >= 0 ? start : 0)
     })
   }, [])
 
@@ -136,6 +150,27 @@ export default function Preview() {
   // Selected clip loops: when it ends, replay the same one (bump seq).
   const onClipEnd = useCallback(() => setSeq((s) => s + 1), [])
 
+  // Left/Right arrows step clips globally — no need to focus the filmstrip first.
+  // Skipped when typing in a field or when a control (e.g. the zoom slider) is
+  // focused, so arrows there keep their native behavior.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      if (!clips.length) return
+      const next = Math.min(clips.length - 1, Math.max(0, sel + (e.key === 'ArrowRight' ? 1 : -1)))
+      if (next !== sel) {
+        e.preventDefault()
+        choose(next)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sel, clips.length, choose])
+
   const current = clips[sel]
 
   return (
@@ -167,6 +202,7 @@ export default function Preview() {
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
             blendMs={300}
+            freezeAt={TEST?.freezeAt}
             style={{ display: 'block', width: '100%', height: '100%' }}
           />
           {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
