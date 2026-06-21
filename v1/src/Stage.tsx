@@ -14,13 +14,16 @@ const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.
 // multiplier. Sampling outside the frame is transparent (no edge smear).
 const FS = `precision mediump float;varying vec2 uv;
 uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;uniform float zoom;
-uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;uniform vec2 base;
+uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;uniform vec2 base;uniform float aspect;
 // anc = where the feet are in THIS clip's frame (per framing). base = the fixed
-// screen point the feet sit at, same for every clip. Mapping screen→texture as
-// anc + (uv - base)/scale lands every framing's feet on the same screen baseline,
-// so Monet doesn't jump position when the framing changes.
+// screen point the feet sit at, same for every clip. The canvas matches the
+// viewport rect (not the square frame); aspect = canvasW/canvasH keeps texels
+// square (no distortion) and lets a wide viewport show MORE of the frame's sides
+// instead of cropping them. Vertical fit drives scale; horizontal just fills the
+// extra width. Feet land on the same screen baseline regardless of framing.
 vec4 stk(sampler2D t,vec2 anc,float scl){
-  vec2 u=anc+(uv-base)/(scl*zoom);
+  float k=scl*zoom;
+  vec2 u=vec2(anc.x+(uv.x-0.5)*aspect/k, anc.y+(uv.y-base.y)/k);
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
@@ -153,17 +156,27 @@ export default function Stage({
     const ancBLoc = gl.getUniformLocation(pr, 'ancB')
     const sclBLoc = gl.getUniformLocation(pr, 'sclB')
     const baseLoc = gl.getUniformLocation(pr, 'base')
+    const aspectLoc = gl.getUniformLocation(pr, 'aspect')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
+    // Size the backing buffer to the DISPLAY rect (not the clip's 640² frame), so a
+    // wide viewport renders wide and shows the frame's sides instead of cropping to a
+    // square. dpr-aware for crispness; `aspect` feeds the shader.
+    let aspect = 1
     const sizeCanvas = () => {
-      const v = a.videoWidth ? a : b
-      if (v.videoWidth) {
-        cv.width = v.videoWidth
-        cv.height = Math.max(1, Math.floor(v.videoHeight / 2))
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const w = Math.max(1, Math.round(cv.clientWidth * dpr))
+      const h = Math.max(1, Math.round(cv.clientHeight * dpr))
+      if (cv.width !== w || cv.height !== h) {
+        cv.width = w
+        cv.height = h
       }
+      aspect = w / h
     }
-    a.addEventListener('loadedmetadata', sizeCanvas)
-    b.addEventListener('loadedmetadata', sizeCanvas)
+    sizeCanvas()
+    const ro = new ResizeObserver(sizeCanvas)
+    ro.observe(cv)
+    window.addEventListener('resize', sizeCanvas)
 
     let raf = 0
     const draw = (now: number) => {
@@ -210,6 +223,7 @@ export default function Stage({
       gl.uniform1f(mixLoc, mixVal.current)
       gl.uniform1f(zoomLoc, cur.current.zoom)
       gl.uniform2fv(baseLoc, cur.current.baseline)
+      gl.uniform1f(aspectLoc, aspect)
       gl.uniform2fv(ancALoc, slotAnchor.current[0])
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
@@ -229,8 +243,8 @@ export default function Stage({
     raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
-      a.removeEventListener('loadedmetadata', sizeCanvas)
-      b.removeEventListener('loadedmetadata', sizeCanvas)
+      ro.disconnect()
+      window.removeEventListener('resize', sizeCanvas)
     }
   }, [])
 

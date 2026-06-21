@@ -167,7 +167,7 @@ export default function Preview() {
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
             blendMs={300}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            style={{ display: 'block', width: '100%', height: '100%' }}
           />
           {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
           <img
