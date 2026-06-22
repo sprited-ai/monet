@@ -10,3 +10,7 @@ worker-configuration.d.ts
 /playwright-report
 /blob-report
 /playwright/.cache
+
+# heavy derived Studio animation clips (regen: scripts/studio-clips.sh)
+/public/studio-assets/clips/
+/public/studio-assets/toys-raw/

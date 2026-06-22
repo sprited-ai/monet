@@ -2,6 +2,7 @@ import { Theme } from '@radix-ui/themes'
 import Home from './Home'
 import Editor from './Editor'
 import Preview from './Preview'
+import Studio from './Studio'
 
 export default function App() {
   // Minimal routing — swap for a router when routes multiply.
@@ -10,6 +11,8 @@ export default function App() {
     <Editor />
   ) : path.startsWith('/preview') ? (
     <Preview />
+  ) : path.startsWith('/studio') ? (
+    <Studio />
   ) : (
     <Home />
   )

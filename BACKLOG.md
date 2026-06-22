@@ -37,6 +37,12 @@
       frame, sets canvas `data-ready`; `preserveDrawingBuffer` only in test so full-page captures
       aren't blank). Preview-wide/zoom lock the viewport-rect fix (no side crop, no distortion).
       Baselines in `v1/tests/__screenshots__`. `pnpm test` / `pnpm test:update`.
+- [x] **Monet Studio (`/studio`)** — toy-play story stage (prototype): animated Monet (APNG-alpha
+      clips drawn to canvas) + draggable toys + narrator caption + **play & record** (canvas+mic→webm)
+      + PNG snapshot. **Continuity**: the scene persists (localStorage) and Monet greets you with
+      time-since-last-visit + "a flower bloomed while you were away" — a first taste of being
+      remembered (see `docs/012-monetto-body.md`). `v1/src/Studio.tsx`. Heavy APNG clips gitignored —
+      regen with `scripts/studio-clips.sh`; degrades to a static Monet pose if absent.
 - [ ] **Editor: keyframe thumbnail picker** (later) — scrub a clip, pick the frame, save it as
       `<name>.thumbnail.webp` (native size, so it just swaps which frame). Local-generated for now.
 - [ ] **Sidecar `<name>.json`** (not started) — hand-authored loop {in,out}, name, kind, tags.
@@ -66,3 +72,8 @@
       `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1`, numpy-2 patch, new GDrive file ID). Excluded from git.
 - [ ] (maybe) Use bizarre-pose-estimator to extract COCO keypoints from Monet animation frames —
       could feed pose-conditioned generation / consistency checks for the v1 animation pipeline.
+- [ ] **Rhythm-cast feel prototype** (`experiments/rhythm-cast-proto/`) — throwaway. Question:
+      does "rhythm performance → shapes the generative birth" (gen-AI 리듬게임) feel good? 3 cast
+      feels (lane/sigil/pulse); gen-AI faked as a procedural flower driven by accuracy/combo/runes.
+      **VERDICT pending** (see NOTES.md): rhythm-twitch vs cozy tone; which feel wins; fold into
+      card→materialize keystone or drop. → then delete/absorb.
