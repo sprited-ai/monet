@@ -3,10 +3,12 @@
 // (docs/016). Procedural so weather / HDRI can drive it later. Opaque.
 precision highp float;
 in vec2 v_uv;
+uniform float u_scale; // = camera zoom; scales the void so it responds to the wheel dolly
 out vec4 o;
 
 vec3 room(vec2 uv) {
   vec2 t = vec2(uv.x, 1.0 - uv.y); // top-origin so the floor brightens toward the bottom
+  t = (t - 0.5) / u_scale + 0.5;   // zoom the void coherently with the camera (no more static bg)
   vec3 c0 = vec3(0.902, 0.922, 0.949), c1 = vec3(0.929, 0.945, 0.969),
        c2 = vec3(0.867, 0.894, 0.929), c3 = vec3(0.831, 0.863, 0.910),
        c4 = vec3(0.945, 0.957, 0.976), w = vec3(1.0);

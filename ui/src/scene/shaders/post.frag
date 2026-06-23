@@ -30,8 +30,8 @@ void main() {
   } else {
     uint frame = uint(u_time * 60.0);
     float n = hash01(uvec2(gl_FragCoord.xy), frame);
-    // Blended SRC_ALPHA toward a per-pixel gray: lifts darks / drops lights a touch,
-    // so the grain reads on both Monet and the light room. Low alpha → minimal haze.
-    o = vec4(vec3(n), 0.05);
+    // Blended SRC_ALPHA toward a per-pixel gray: lifts darks / drops lights a touch.
+    // Kept low so it doesn't sparkle on the bright white room.
+    o = vec4(vec3(n), 0.022);
   }
 }

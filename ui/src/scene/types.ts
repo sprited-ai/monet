@@ -8,6 +8,7 @@ export type Frame = {
   view: mat4
   proj: mat4
   right: vec3 // billboard right vector (upright)
+  zoom: number // camera dolly zoom (the void scales with it)
   ambient: vec3 // room light tint (the HDRI / weather hook)
   width: number // drawing-buffer size (px)
   height: number

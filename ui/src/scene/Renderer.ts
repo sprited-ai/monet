@@ -97,6 +97,7 @@ export class Renderer {
         view: this.view,
         proj: this.proj,
         right: this.right,
+        zoom: this.zoom,
         ambient: this.ambient,
         width: this.canvas.width,
         height: this.canvas.height,
