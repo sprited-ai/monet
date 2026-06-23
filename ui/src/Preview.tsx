@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
+import type { PoseDoc } from './Stage'
 
 // Apple Photos-style stage: a big player up top, and a horizontal filmstrip of
 // every clip's thumbnail along the bottom. Whatever thumbnail is centered under
@@ -38,6 +39,8 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
+  const [overlay, setOverlay] = useState(true) // "x-ray vision" — pose overlay, on by default
+  const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data
   const [barH, setBarH] = useState(132) // filmstrip bar height (stage sits above it)
   const stripRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -173,6 +176,24 @@ export default function Preview() {
 
   const current = clips[sel]
 
+  // Fetch the selected clip's pose JSON for the overlay. Missing (not yet generated)
+  // → null, and the overlay simply draws nothing for that clip.
+  useEffect(() => {
+    if (!current) {
+      setPose(null)
+      return
+    }
+    let cancelled = false
+    setPose(null)
+    fetch(`/contents/${current.key.replace(/\.mp4$/, '.pose.json')}`)
+      .then((r) => (r.ok ? (r.json() as Promise<PoseDoc>) : null))
+      .then((d) => !cancelled && setPose(d))
+      .catch(() => !cancelled && setPose(null))
+    return () => {
+      cancelled = true
+    }
+  }, [current?.key])
+
   return (
     <div
       // Tap anywhere is a fallback to start playback if muted-autoplay was blocked
@@ -199,6 +220,8 @@ export default function Preview() {
             scale={geom(current.name).scale}
             anchor={geom(current.name).anchor}
             zoom={zoom}
+            pose={pose}
+            showOverlay={overlay}
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
             blendMs={300}
@@ -236,6 +259,32 @@ export default function Preview() {
             {pretty(current.name)}
           </div>
         )}
+
+        {/* X-ray vision toggle — pose / com / face overlay (on by default). */}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setOverlay((v) => !v)}
+          title="toggle pose overlay (x-ray)"
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            border: 0,
+            cursor: 'pointer',
+            borderRadius: 999,
+            padding: '6px 12px',
+            font: '12px ui-monospace, monospace',
+            background: overlay ? '#1d9bf0' : '#ffffffcc',
+            color: overlay ? '#fff' : '#6b5f54',
+            boxShadow: '0 1px 4px rgba(40,30,20,0.18)',
+          }}
+        >
+          {overlay ? '◉' : '○'} x-ray
+          {overlay && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+        </button>
 
         {/* Zoom control */}
         <div

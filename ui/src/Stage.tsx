@@ -49,6 +49,57 @@ void main(){
   gl_FragColor = m.a>0.0001 ? vec4(m.rgb/m.a, m.a) : vec4(0.0);
 }`
 
+// Skeleton edges (indices into kp, in coco_keypoints_ext order: 0 nose … 15/16
+// ankles, 21/22 toes). Used only to draw the overlay.
+const POSE_EDGES: [number, number][] = [
+  [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12],
+  [11, 13], [13, 15], [12, 14], [14, 16], [15, 21], [16, 22], [0, 5], [0, 6],
+]
+
+// Draw one frame's pose overlay. `project(ux,uy) -> [sx,sy]` inverts the Stage
+// shader transform, mapping normalized color-frame coords to screen pixels.
+function drawOverlay(
+  ctx: CanvasRenderingContext2D,
+  fr: PoseFrame,
+  project: (ux: number, uy: number) => [number, number],
+  w: number,
+  h: number,
+) {
+  const KP_MIN = 0.12, LINE_MIN = 0.1
+  // skeleton
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = 'rgba(0,210,255,0.85)'
+  for (const [a, b] of POSE_EDGES) {
+    const pa = fr.kp[a], pb = fr.kp[b]
+    if (!pa || !pb || pa[2] < LINE_MIN || pb[2] < LINE_MIN) continue
+    const A = project(pa[0], pa[1]), B = project(pb[0], pb[1])
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke()
+  }
+  // keypoint dots
+  ctx.fillStyle = 'rgba(255,64,64,0.95)'
+  for (const kp of fr.kp) {
+    if (!kp || kp[2] < KP_MIN) continue
+    const P = project(kp[0], kp[1])
+    ctx.beginPath(); ctx.arc(P[0], P[1], 3, 0, 7); ctx.fill()
+  }
+  // com — center of mass → contact-shadow x: green plumb line + dot
+  const C = project(fr.com[0], fr.com[1])
+  ctx.strokeStyle = 'rgba(64,230,100,0.7)'
+  ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.moveTo(C[0], 0); ctx.lineTo(C[0], h); ctx.stroke()
+  ctx.fillStyle = 'rgba(64,230,100,0.95)'
+  ctx.beginPath(); ctx.arc(C[0], C[1], 4, 0, 7); ctx.fill()
+  // face — camera zoom-to-face target: blue dot + framing box
+  const F = project(fr.face[0], fr.face[1])
+  const half = Math.abs(project(fr.face[0] + 0.22, fr.face[1])[0] - F[0])
+  ctx.strokeStyle = 'rgba(70,150,255,0.9)'
+  ctx.lineWidth = 2
+  ctx.strokeRect(F[0] - half, F[1] - half, half * 2, half * 2)
+  ctx.fillStyle = 'rgba(70,150,255,0.95)'
+  ctx.beginPath(); ctx.arc(F[0], F[1], 3.5, 0, 7); ctx.fill()
+  void w
+}
+
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
 // it stays blank. Keep the source element in the render tree but tiny + transparent.
 const HIDDEN_VIDEO: CSSProperties = {
@@ -61,6 +112,21 @@ const HIDDEN_VIDEO: CSSProperties = {
   left: 0,
 }
 
+// Pose-overlay data (one clip's bizarre-pose-estimator output). Coords are
+// normalized 0..1 to the COLOR frame — i.e. the shader's `u` space — so they map
+// to screen by inverting the shader transform (see drawOverlay below).
+export type PoseDoc = {
+  fps: number
+  frames: number
+  poses: (PoseFrame | null)[]
+}
+type PoseFrame = {
+  bbox: [number, number, number, number]
+  com: [number, number]
+  face: [number, number]
+  kp: [number, number, number][] // [x, y, score]
+}
+
 type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
@@ -68,6 +134,8 @@ type Props = {
   anchor?: [number, number] // framing origin (feet) in the frame, normalized
   baseline?: [number, number] // fixed screen point the feet sit at, all clips
   zoom?: number // global user zoom multiplier
+  pose?: PoseDoc | null // this clip's pose data, for the optional overlay
+  showOverlay?: boolean // draw the pose / com / face overlay ("x-ray vision")
   onClipEnd?: () => void
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
@@ -86,6 +154,8 @@ export default function Stage({
   anchor = [0.5, 0.87],
   baseline = [0.5, 0.87],
   zoom = 1,
+  pose = null,
+  showOverlay = false,
   onClipEnd,
   onPlaying,
   blendMs = 150,
@@ -94,6 +164,7 @@ export default function Stage({
   style,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const overlayRef = useRef<HTMLCanvasElement>(null)
   const vRef = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)]
   const active = useRef(0) // slot currently playing / shown (0 or 1)
   const mixVal = useRef(0) // 0 = slot0, 1 = slot1 (what the shader shows)
@@ -107,8 +178,14 @@ export default function Stage({
   const frozenSeeked = useRef(false) // test freeze: the seek to freezeAt has landed
   const slotScale = useRef<[number, number]>([scale, scale]) // per-slot framing scale
   const slotAnchor = useRef<[[number, number], [number, number]]>([anchor, anchor])
-  const cur = useRef({ scale, anchor, baseline, zoom }) // latest props for the loop
-  cur.current = { scale, anchor, baseline, zoom }
+  const slotPose = useRef<[PoseDoc | null, PoseDoc | null]>([pose, pose]) // per-slot pose
+  const poseRef = useRef(pose) // latest pose prop, assigned to a slot on load
+  poseRef.current = pose
+  const lastLoaded = useRef(0) // slot the most recent clip loaded into (pose fetch lands here)
+  // Temporal smoothing state for the com/face markers (dt-based EMA in the draw loop).
+  const smooth = useRef<{ com: [number, number]; face: [number, number]; idx: number; slot: number; t: number } | null>(null)
+  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay }) // latest props for the loop
+  cur.current = { scale, anchor, baseline, zoom, showOverlay }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
@@ -179,17 +256,28 @@ export default function Stage({
     const fasBLoc = gl.getUniformLocation(pr, 'fasB')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
+    // 2D overlay context (pose / com / face), sized in lockstep with the GL canvas.
+    const oc = overlayRef.current!
+    const octx = oc.getContext('2d')
+
     // Size the backing buffer to the DISPLAY rect (not the clip's 640² frame), so a
     // wide viewport renders wide and shows the frame's sides instead of cropping to a
     // square. dpr-aware for crispness; `aspect` feeds the shader.
     let aspect = 1
+    let cssW = 1, cssH = 1, dpr = 1
     const sizeCanvas = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
-      const w = Math.max(1, Math.round(cv.clientWidth * dpr))
-      const h = Math.max(1, Math.round(cv.clientHeight * dpr))
+      dpr = Math.min(window.devicePixelRatio || 1, 2)
+      cssW = cv.clientWidth
+      cssH = cv.clientHeight
+      const w = Math.max(1, Math.round(cssW * dpr))
+      const h = Math.max(1, Math.round(cssH * dpr))
       if (cv.width !== w || cv.height !== h) {
         cv.width = w
         cv.height = h
+      }
+      if (oc.width !== w || oc.height !== h) {
+        oc.width = w
+        oc.height = h
       }
       aspect = w / h
     }
@@ -256,6 +344,49 @@ export default function Stage({
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+      // Pose overlay — invert the shader transform for the ACTIVE slot's current
+      // frame, then draw in CSS px (ctx pre-scaled by dpr). Tracks the newest clip;
+      // during a blend it briefly lags the outgoing one (fine for a dev overlay).
+      if (octx) {
+        octx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        octx.clearRect(0, 0, cssW, cssH)
+        const slot = active.current
+        const av = slot === 0 ? a : b
+        const doc = slotPose.current[slot]
+        if (cur.current.showOverlay && doc && doc.poses.length && av.duration > 0) {
+          const n = doc.poses.length
+          const idx = Math.max(0, Math.min(n - 1, Math.round(av.currentTime * (doc.fps || 24))))
+          const fr = doc.poses[idx]
+          if (fr) {
+            const anc = slotAnchor.current[slot]
+            const k = slotScale.current[slot] * cur.current.zoom
+            const fas = fa(av)
+            const base = cur.current.baseline
+            const project = (ux: number, uy: number): [number, number] => [
+              (0.5 + ((ux - anc[0]) * (k * fas)) / aspect) * cssW,
+              (base[1] + (uy - anc[1]) * k) * cssH,
+            ]
+            // Temporal smoothing (dt-based EMA, tau≈90ms): glides the com/face
+            // markers, killing per-frame jitter and the 24→60fps stair-step. Resets
+            // on clip change / loop wrap / seek so it doesn't swoop across a cut.
+            const s = smooth.current
+            if (!s || s.slot !== slot || idx < s.idx || idx - s.idx > 4) {
+              smooth.current = { com: [...fr.com], face: [...fr.face], idx, slot, t: now }
+            } else {
+              const a = 1 - Math.exp(-Math.max(0, (now - s.t) / 1000) / 0.09)
+              s.com[0] += (fr.com[0] - s.com[0]) * a
+              s.com[1] += (fr.com[1] - s.com[1]) * a
+              s.face[0] += (fr.face[0] - s.face[0]) * a
+              s.face[1] += (fr.face[1] - s.face[1]) * a
+              s.idx = idx
+              s.t = now
+            }
+            const sm = smooth.current
+            drawOverlay(octx, { ...fr, com: sm.com, face: sm.face }, project, cssW, cssH)
+          }
+        }
+      }
       if (!playingFired.current) {
         const av = active.current === 0 ? a : b
         // Frozen: ready once the seek landed (frame decoded) and we've drawn it.
@@ -295,6 +426,8 @@ export default function Stage({
       first.current = false
       slotScale.current[0] = cur.current.scale
       slotAnchor.current[0] = cur.current.anchor
+      slotPose.current[0] = poseRef.current
+      lastLoaded.current = 0
       const v = vRef[0].current!
       v.src = src
       v.load() // Safari needs an explicit load() after setting src
@@ -305,6 +438,8 @@ export default function Stage({
     const incoming = 1 - active.current
     slotScale.current[incoming] = cur.current.scale // this clip's framing scale/anchor
     slotAnchor.current[incoming] = cur.current.anchor
+    slotPose.current[incoming] = poseRef.current
+    lastLoaded.current = incoming
     const v = vRef[incoming].current!
     v.src = src
     v.load() // Safari won't refetch a reused (ended) element on a bare src swap → froze
@@ -314,6 +449,12 @@ export default function Stage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq])
 
+  // Pose JSON arrives async (after the clip is already loading), so assign it to the
+  // slot the latest clip loaded into when it lands.
+  useEffect(() => {
+    slotPose.current[lastLoaded.current] = pose
+  }, [pose])
+
   return (
     <>
       {/* Not display:none — Safari won't decode a display:none video (canvas stays
@@ -321,6 +462,11 @@ export default function Stage({
       <video ref={vRef[0]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <video ref={vRef[1]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <canvas ref={canvasRef} style={style} />
+      {/* Pose overlay — same rect as the GL canvas; drawn by the GL draw loop. */}
+      <canvas
+        ref={overlayRef}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+      />
     </>
   )
 }
