@@ -16,7 +16,7 @@ export class Renderer {
   readonly post: PostNode
   toggles: Toggles = { shadow: true, vignette: true, grain: true }
   // Cozy near-front camera (docs/016). Tunable live in the debug overlay.
-  cam = { fov: 32, eye: [0, 1.15, 4.2] as [number, number, number], target: [0, 1.0, 0] as [number, number, number] }
+  cam = { fov: 34, eye: [0, 1.2, 4.9] as [number, number, number], target: [0, 0.85, 0] as [number, number, number] }
 
   private nodes: SceneNode[]
   private raf = 0

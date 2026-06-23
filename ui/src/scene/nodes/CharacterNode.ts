@@ -8,9 +8,12 @@ import type { Frame, Framing, SceneNode } from '../types'
 // proven /preview Stage so the character never goes translucent at a clip seam.
 // The director (Whiteroom) calls setClip(); this node knows nothing about the FSM.
 
-const QUAD_H = 2.7 // world height of the reference billboard box — sets Monet's size
+const QUAD_H = 2.4 // world height of the reference billboard box — sets Monet's size
 const QUAD: [number, number] = [QUAD_H, QUAD_H] // square; per-clip framing is resolved in the shader
-const BASE: [number, number] = [0.5, 1.0] // feet sit at the quad's bottom
+// Feet baseline (= the proven /preview Stage value). The clip's feet anchor sits at
+// ~0.87 of the frame, with the soles below it; 0.87 leaves that room so the whole
+// foot renders down to the frame bottom instead of being clipped at the floor line.
+const BASE: [number, number] = [0.5, 0.87]
 
 type Slot = {
   video: HTMLVideoElement
@@ -48,7 +51,7 @@ export class CharacterNode implements SceneNode {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
     gl.bindVertexArray(null)
     this.u = uniforms(gl, this.prog, [
-      'u_view', 'u_proj', 'u_pos', 'u_quad', 'u_right', 'tA', 'tB', 'mixv', 'feather',
+      'u_view', 'u_proj', 'u_pos', 'u_quad', 'u_right', 'u_feet', 'tA', 'tB', 'mixv', 'feather',
       'quadAspect', 'ancA', 'ancB', 'base', 'sclA', 'sclB', 'fasA', 'fasB', 'u_ambient',
     ])
     const mkVideo = () => {
@@ -144,6 +147,7 @@ export class CharacterNode implements SceneNode {
     gl.uniformMatrix4fv(this.u.u_proj, false, proj)
     gl.uniform3fv(this.u.u_pos, this.pos)
     gl.uniform2fv(this.u.u_quad, QUAD)
+    gl.uniform1f(this.u.u_feet, 1 - BASE[1]) // pin the feet anchor to the floor
     gl.uniform3fv(this.u.u_right, right as Float32Array)
     gl.uniform3fv(this.u.u_ambient, ambient as Float32Array)
     gl.uniform1f(this.u.u_feather, 0.04)

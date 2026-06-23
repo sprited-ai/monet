@@ -195,7 +195,7 @@ export default function Whiteroom() {
           position: 'fixed',
           left: 0,
           right: 0,
-          bottom: '7vh',
+          bottom: '13vh',
           textAlign: 'center',
           padding: '0 8vw',
           pointerEvents: 'none',
@@ -234,7 +234,7 @@ export default function Whiteroom() {
         style={{
           position: 'fixed',
           left: '50%',
-          bottom: '15vh',
+          bottom: '5vh',
           transform: 'translateX(-50%)',
           width: 'min(520px, 72vw)',
           padding: '11px 16px',
