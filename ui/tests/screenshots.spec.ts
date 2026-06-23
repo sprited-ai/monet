@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-// Visual-regression coverage for the three routes. The animated stage is frozen on a
+// Visual-regression coverage for /editor and /preview. The animated stage is frozen on a
 // single seeked frame (?test=1) so the WebGL render is deterministic — these catch
 // the layout/render regressions we kept hitting (filmstrip occlusion, side cropping,
 // character position jump, distortion across framings).
@@ -10,11 +10,6 @@ async function stageReady(page: Page) {
   await expect(page.locator('canvas')).toHaveAttribute('data-ready', '1', { timeout: 20_000 })
   await page.waitForTimeout(200) // a couple more RAFs so the frame is fully painted
 }
-
-test('home', async ({ page }) => {
-  await page.goto('/')
-  await expect(page).toHaveScreenshot('home.png', { fullPage: true })
-})
 
 test('editor grid', async ({ page }) => {
   await page.goto('/editor')

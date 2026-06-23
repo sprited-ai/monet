@@ -1,12 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "monet-v1",
+  "name": "monet-ui",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./api/index.ts",
-  // Push to main auto-deploys here (see .github/workflows/deploy.yml). On deploy,
-  // wrangler provisions this custom domain (DNS + cert) on the sprited.ai zone.
-  "routes": [{ "pattern": "monet-v1.sprited.ai", "custom_domain": true }],
+  // Push to main (paths ui/**) auto-deploys here (see .github/workflows/deploy-ui.yml).
+  // On deploy, wrangler provisions this custom domain (DNS + cert) on the sprited.ai zone.
+  // Everything lives at monet.sprited.ai now (the whiteroom + /editor + /preview).
+  "routes": [{ "pattern": "monet.sprited.ai", "custom_domain": true }],
   // The Cloudflare Vite plugin auto-populates assets.directory with the client
   // build output on `vite build`; do not set it manually.
   "assets": {

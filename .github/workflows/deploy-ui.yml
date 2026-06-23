@@ -1,12 +1,11 @@
-name: deploy-v1
+name: deploy-ui
 
-# Push to main that touches v1/ → build & deploy to monet-v1.sprited.ai.
-# One file = one version. To add v2: copy this file to deploy-v2.yml and swap v1 → v2.
+# Push to main that touches ui/ → build & deploy to monet.sprited.ai.
 
 on:
   push:
     branches: [main]
-    paths: ['v1/**']
+    paths: ['ui/**']
   workflow_dispatch:
 
 jobs:
@@ -14,17 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: v1
+        working-directory: ui
     steps:
       - uses: actions/checkout@v5
         with:
-          sparse-checkout: v1 # fetch only this app, not the heavy contents/
+          sparse-checkout: ui # fetch only this app, not the heavy contents/
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: v1/pnpm-lock.yaml
+          cache-dependency-path: ui/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm exec wrangler deploy
