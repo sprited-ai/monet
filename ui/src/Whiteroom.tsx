@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { SpeakerLoudIcon, SpeakerOffIcon } from '@radix-ui/react-icons'
 import { Renderer } from './scene/Renderer'
 import { resumeAudio, speak, stopSpeak } from './voice'
 import type { Framing } from './scene/types'
@@ -339,12 +340,13 @@ export default function Whiteroom() {
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           cursor: 'pointer',
-          fontSize: 17,
-          lineHeight: 1,
-          color: 'rgba(60,52,46,0.9)',
+          display: 'grid',
+          placeItems: 'center',
+          color: muted ? 'rgba(120,110,104,0.85)' : 'rgba(201,122,82,0.95)',
+          padding: 0,
         }}
       >
-        {muted ? '🔇' : '🔊'}
+        {muted ? <SpeakerOffIcon width={18} height={18} /> : <SpeakerLoudIcon width={18} height={18} />}
       </button>
 
       {debug && renderer.current && <DebugPanel r={renderer.current} onChange={() => force((n) => n + 1)} />}
