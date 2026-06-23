@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Theme, Flex, Box, Text, TextArea, IconButton, Badge, ScrollArea, Spinner, Code } from '@radix-ui/themes'
-import { PaperPlaneIcon, Pencil2Icon } from '@radix-ui/react-icons'
+import { PaperPlaneIcon, Pencil2Icon, ExitIcon } from '@radix-ui/react-icons'
 
 type Part = { kind: 'text'; text: string } | { kind: 'tool'; name: string }
 type Msg = { role: 'user' | 'assistant'; parts: Part[] }
@@ -147,11 +147,21 @@ export default function App() {
           <Badge color="green" variant="soft">
             claude code · gin
           </Badge>
-          <Box style={{ marginLeft: 'auto' }}>
+          <Flex gap="1" style={{ marginLeft: 'auto' }}>
             <IconButton variant="ghost" color="gray" onClick={newChat} title="새 대화" disabled={busy}>
               <Pencil2Icon />
             </IconButton>
-          </Box>
+            <IconButton
+              variant="ghost"
+              color="gray"
+              title="로그아웃"
+              onClick={() => {
+                window.location.href = '/cdn-cgi/access/logout'
+              }}
+            >
+              <ExitIcon />
+            </IconButton>
+          </Flex>
         </Flex>
 
         <ScrollArea ref={scrollRef as any} style={{ flex: 1 }}>

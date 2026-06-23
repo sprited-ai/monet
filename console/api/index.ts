@@ -37,9 +37,13 @@ async function proxyAgent(c: Context<{ Bindings: Bindings }>, path: string) {
   }
   const resp = await fetch(`${base}${path}`, init)
   const headers = new Headers(resp.headers)
-  // Strip hop-by-hop / connection headers — forwarding the origin's `connection:
-  // keep-alive` etc. through the Worker corrupts connection reuse and (with SSE)
-  // breaks Cloudflare Access's session-cookie handling on the *next* request.
+  // CRITICAL: strip Set-Cookie. The Worker calls monet-agent with the Access SERVICE
+  // TOKEN, so monet-agent's Access returns a service-token session cookie. Forwarding
+  // it would make the browser overwrite the user's CF_Authorization (for monet-console)
+  // with a service-token token (sub="") — which then fails monet-console's "Allow Jin"
+  // policy, so the *next* request gets 302'd to the Access login (CORS "Failed to fetch").
+  headers.delete('set-cookie')
+  // Hop-by-hop / length headers shouldn't be forwarded through the Worker either.
   for (const h of ['connection', 'keep-alive', 'transfer-encoding', 'content-encoding', 'content-length']) {
     headers.delete(h)
   }
