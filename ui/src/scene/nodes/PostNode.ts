@@ -31,7 +31,7 @@ export class PostNode implements SceneNode {
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
     if (toggles.grain) {
-      gl.blendFunc(gl.ONE, gl.ONE) // additive
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) // toward per-pixel gray (bidirectional)
       gl.uniform1i(this.u.u_mode, 1)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }

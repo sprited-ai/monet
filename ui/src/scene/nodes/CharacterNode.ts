@@ -8,7 +8,7 @@ import type { Frame, Framing, SceneNode } from '../types'
 // proven /preview Stage so the character never goes translucent at a clip seam.
 // The director (Whiteroom) calls setClip(); this node knows nothing about the FSM.
 
-const QUAD_H = 2.4 // world height of the reference billboard box — sets Monet's size
+const QUAD_H = 3.0 // world height of the reference billboard box — sets Monet's size
 const QUAD: [number, number] = [QUAD_H, QUAD_H] // square; per-clip framing is resolved in the shader
 // Feet baseline (= the proven /preview Stage value). The clip's feet anchor sits at
 // ~0.87 of the frame, with the soles below it; 0.87 leaves that room so the whole
