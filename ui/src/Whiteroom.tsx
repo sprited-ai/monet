@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Renderer } from './scene/Renderer'
+import { resumeAudio, speak, stopSpeak } from './voice'
 import type { Framing } from './scene/types'
 
 // The white room — Monet's home (/). A real 3D scene (perspective camera) with
@@ -49,6 +50,14 @@ export default function Whiteroom() {
   const [focused, setFocused] = useState(false)
   const [debug, setDebug] = useState(false)
   const [, force] = useState(0) // re-render the debug panel when sliders move
+  // Voice is opt-in: muted by default (no autoplay, no surprise ElevenLabs spend).
+  const [muted, setMuted] = useState(() => {
+    try {
+      return localStorage.getItem('monet.muted') !== '0'
+    } catch {
+      return true
+    }
+  })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoBoxRef = useRef<HTMLDivElement>(null)
@@ -60,15 +69,14 @@ export default function Whiteroom() {
   const lastIdle = useRef(-1)
   const history = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
   const thinking = useRef(false)
+  const talkClip = useRef('monet-talk-2') // the clip she loops while speaking
+  const speakTimer = useRef(0) // muted: ends speaking after a read-time estimate
+  const mutedRef = useRef(muted)
+  mutedRef.current = muted
 
   const framingFor = useCallback((name: string): Framing => {
     const key = indexed.current[name]?.framing ?? 'regular'
     return framings.current[key] ?? framings.current['regular'] ?? FALLBACK_FRAMING
-  }, [])
-
-  const clipMs = useCallback((name: string) => {
-    const e = indexed.current[name]
-    return e?.frames && e?.fps ? (e.frames / e.fps) * 1000 : 5000
   }, [])
 
   const play = useCallback(
@@ -86,17 +94,27 @@ export default function Whiteroom() {
     return COZY_ACTIONS[Math.floor(Math.random() * COZY_ACTIONS.length)]
   }, [])
 
-  // One clip finished → decide the next. Drains a reply's script, else idles.
+  // One clip finished → decide the next. Plays a reply's queued reaction, loops the
+  // talk clip while she's still speaking, else returns to the autonomous idle loop.
   const advance = useCallback(() => {
     if (script.current.length > 0) {
       play(script.current.shift()!)
       return
     }
     if (speaking.current) {
-      speaking.current = false
-      setCaption(null)
-      setPhase('idle')
+      play(talkClip.current) // keep talking until the audio (or read-timer) ends
+      return
     }
+    play(pickAutonomous())
+  }, [play, pickAutonomous])
+
+  // Speaking is over (audio finished, or the muted read-timer elapsed) → back to idle.
+  const endSpeaking = useCallback(() => {
+    if (!speaking.current) return
+    speaking.current = false
+    window.clearTimeout(speakTimer.current)
+    setCaption(null)
+    setPhase('idle')
     play(pickAutonomous())
   }, [play, pickAutonomous])
 
@@ -104,6 +122,8 @@ export default function Whiteroom() {
     async (text: string) => {
       const msg = text.trim()
       if (!msg || thinking.current) return
+      stopSpeak() // barge-in: hush any reply in progress
+      window.clearTimeout(speakTimer.current)
       thinking.current = true
       history.current.push({ role: 'user', content: msg })
       history.current = history.current.slice(-16)
@@ -126,15 +146,23 @@ export default function Whiteroom() {
       history.current.push({ role: 'assistant', content: reply.text })
 
       const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
-      const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
-      const reps = Math.max(1, Math.ceil(capMs / clipMs(talk)))
-      script.current = [...(reaction ? [reaction] : []), ...Array(reps).fill(talk)]
+      talkClip.current = talk
       speaking.current = true
       setCaption(reply.text)
       setPhase('speaking')
+      script.current = reaction ? [reaction] : [] // a one-shot reaction, then advance() loops `talk`
       advance() // interrupt the idle clip and start reacting/speaking now
+
+      if (mutedRef.current) {
+        // silent: hold the caption + talk loop for an estimated read time
+        const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
+        speakTimer.current = window.setTimeout(endSpeaking, capMs)
+      } else {
+        // voiced: talk until the audio finishes
+        speak(reply.text).finally(endSpeaking)
+      }
     },
-    [advance, clipMs],
+    [advance, endSpeaking],
   )
 
   // Mount the scene; load framing geometry; greet on arrival.
@@ -281,6 +309,43 @@ export default function Whiteroom() {
           transition: 'background .15s ease, box-shadow .15s ease',
         }}
       />
+
+      {/* Mute toggle — voice only plays when un-muted (off by default). */}
+      <button
+        onClick={() =>
+          setMuted((m) => {
+            const next = !m
+            try {
+              localStorage.setItem('monet.muted', next ? '1' : '0')
+            } catch {
+              /* private mode — fine, just don't persist */
+            }
+            if (next) stopSpeak()
+            else resumeAudio() // un-mute is a user gesture → unlock audio playback
+            return next
+          })
+        }
+        title={muted ? 'unmute her voice' : 'mute'}
+        aria-label={muted ? 'unmute' : 'mute'}
+        style={{
+          position: 'fixed',
+          top: 18,
+          right: 18,
+          width: 38,
+          height: 38,
+          borderRadius: 999,
+          border: '1px solid rgba(40,46,58,0.16)',
+          background: 'rgba(255,255,255,0.6)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          cursor: 'pointer',
+          fontSize: 17,
+          lineHeight: 1,
+          color: 'rgba(60,52,46,0.9)',
+        }}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
 
       {debug && renderer.current && <DebugPanel r={renderer.current} onChange={() => force((n) => n + 1)} />}
     </div>

@@ -4,6 +4,8 @@ type Bindings = {
   ASSETS: Fetcher
   CONTENTS: R2Bucket
   ANTHROPIC_API_KEY?: string // set with `wrangler secret put ANTHROPIC_API_KEY` to light the brain
+  ELEVENLABS_API_KEY?: string // her voice (TTS); only called when the user un-mutes
+  ELEVENLABS_TTS_MODEL?: string
   MODEL?: string
 }
 
@@ -127,6 +129,39 @@ app.get('/contents/*', async (c) => {
     return new Response(obj.body, { status: 206, headers })
   }
   return new Response(obj.body, { headers })
+})
+
+// Her voice. POST /api/tts { text } → ElevenLabs mp3. Called by the white room only
+// when the user has un-muted (so it doesn't autoplay or burn credits silently).
+// Per-language voice — a single voice carries its accent, so off-language sounds wrong.
+const VOICE_KO = 'n2fbxG88jqAoaVPUy3IG' // Yooni — Seoul native
+const VOICE_EN = 'uYXf8XasLslADfZ2MB4u' // Hope — bright, girly, English-native
+const VOICE_JA = 'ozfS3gQtjFX3kQyJ12dX' // Saori — warm, Japanese-native
+const isKorean = (s: string) => /[㄰-㆏가-힣]/.test(s)
+const isJapanese = (s: string) => /[぀-ヿ]/.test(s)
+
+app.post('/api/tts', async (c) => {
+  const body = await c.req.json<{ text?: string }>().catch(() => ({}) as { text?: string })
+  const text = (body.text || '').trim().slice(0, 600)
+  if (!text) return c.json({ error: 'no text' }, 400)
+  const key = c.env.ELEVENLABS_API_KEY
+  if (!key) return c.json({ error: 'no ELEVENLABS_API_KEY' }, 503)
+  const voiceId = isKorean(text) ? VOICE_KO : isJapanese(text) ? VOICE_JA : VOICE_EN
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'xi-api-key': key, accept: 'audio/mpeg' },
+    body: JSON.stringify({
+      text,
+      model_id: c.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
+      output_format: 'mp3_44100_128',
+      voice_settings: { stability: 0.32, similarity_boost: 0.7, style: 0.55, use_speaker_boost: true },
+    }),
+  })
+  if (!r.ok) {
+    console.warn('eleven-tts', r.status, await r.text().catch(() => ''))
+    return c.json({ error: `tts ${r.status}` }, 502)
+  }
+  return new Response(r.body, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'no-store' } })
 })
 
 export default app
