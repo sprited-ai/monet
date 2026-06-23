@@ -18,6 +18,8 @@ export class Renderer {
   // Cozy near-front camera (docs/016). Tunable live in the debug overlay.
   cam = { fov: 34, eye: [0, 1.45, 3.9] as [number, number, number], target: [0, 1.3, 0] as [number, number, number] }
 
+  zoom = 1 // current dolly zoom (1 = the framing above); eased toward zoomTarget
+  private zoomTarget = 1
   private nodes: SceneNode[]
   private raf = 0
   private last = 0
@@ -51,11 +53,21 @@ export class Renderer {
     }
   }
 
+  // Wheel zoom: multiply the dolly target, clamped, then eased in computeCamera.
+  zoomBy(factor: number) {
+    this.zoomTarget = Math.min(2.6, Math.max(0.6, this.zoomTarget * factor))
+  }
+
   private computeCamera() {
     const aspect = this.canvas.width / this.canvas.height
     mat4.perspective(this.proj, (this.cam.fov * Math.PI) / 180, aspect, 0.1, 100)
-    const eye = vec3.fromValues(this.cam.eye[0], this.cam.eye[1], this.cam.eye[2])
+    this.zoom += (this.zoomTarget - this.zoom) * 0.2 // ease toward the wheel target
     const target = vec3.fromValues(this.cam.target[0], this.cam.target[1], this.cam.target[2])
+    const eye = vec3.fromValues(this.cam.eye[0], this.cam.eye[1], this.cam.eye[2])
+    // Dolly: scale the eye's offset from the target by 1/zoom (zoom>1 = closer/bigger).
+    vec3.subtract(eye, eye, target)
+    vec3.scale(eye, eye, 1 / this.zoom)
+    vec3.add(eye, eye, target)
     const up = vec3.fromValues(0, 1, 0)
     mat4.lookAt(this.view, eye, target, up)
     // Upright billboard right = the camera's right vector flattened onto the xz plane.

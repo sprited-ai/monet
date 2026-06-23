@@ -161,6 +161,18 @@ export default function Whiteroom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Mouse wheel dollies the camera in/out on Monet (scroll up = closer).
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      renderer.current?.zoomBy(Math.pow(1.0016, -e.deltaY))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   // Backtick toggles the debug overlay.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
