@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "monet-console",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./api/index.ts",
+  // Jin-only admin console + seed template for future apps. Push to main (paths console/**)
+  // auto-deploys here; wrangler provisions this custom domain on the sprited.ai zone.
+  // Gate the hostname with Cloudflare Access (Zero Trust) — already done (Jin-only).
+  // One-level subdomain so Universal SSL (*.sprited.ai) covers it — like monet-v1.
+  // (console.monet.sprited.ai would be a 2-level subdomain with no free TLS cert.)
+  "routes": [{ "pattern": "monet-console.sprited.ai", "custom_domain": true }],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/contents/*"]
+  },
+  // gin claude-bridge tunnel (set the real hostname once the tunnel public hostname exists).
+  "vars": {
+    "AGENT_BASE_URL": "https://monet-agent.sprited.ai"
+  },
+  // Generated videos + assets. Same bucket as v1.
+  "r2_buckets": [{ "binding": "CONTENTS", "bucket_name": "monet-contents" }],
+  // Cloudflare Access SERVICE TOKEN for the gin tunnels (already in monet/.env.local):
+  //   wrangler secret put CF_ACCESS_CLIENT_ID
+  //   wrangler secret put CF_ACCESS_CLIENT_SECRET
+  "observability": { "logs": { "enabled": true } }
+}

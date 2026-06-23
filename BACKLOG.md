@@ -64,6 +64,71 @@
       deflicker (`atadenoise`+`deflicker`) fixes only 57% of global pumping / 7% of local flicker —
       band-aid. Siblings are clean, so the pipeline is fine; regenerate -3 (new seed) or drop it.
 
+## Content / GTM
+
+- [x] **Seedance i2v generation pipeline** — `scripts/seedance.py` animates a still → video via
+      fal.ai (Seedance 1.0-pro / 2.0 / 2.0-fast; queue API, FAL_KEY in `.env.local`, `generate_audio`
+      off by default to dodge fal's partner-validation audio false-positives). 9:16 Reel finish =
+      blurred-fill composite. **Verdict: 2.0 >> 1.0-pro** (real camera move + dynamic motion; 1.0 = static puppet).
+      **Cost:** fal is priciest (~$0.3/s 1080p) → for iteration use `--model seedance-2.0-fast --resolution 480p`
+      then free-upscale via comfy.sprited.ai; if volume grows switch provider to Atlas Cloud (~$0.08/s, 1/3 of fal).
+- [ ] **First IG post asset: umbrella-rain** — `ig/gen/umbrella-rain_FINAL.mp4` (dynamic twirl, 1080×1920).
+      Jin posts manually to @monet.sprited (add trending audio in-app; it's silent). Caption drafted.
+- [ ] **IG Graph API auto-posting** (deferred — manual for now) — needs @monet.sprited → Professional +
+      FB Page + Meta app + long-lived token + IG_USER_ID in `.env.local`; video must be a public URL
+      (push to R2 `monet-contents`). Graph API can't add trending audio. Wire publish (container→publish) when ready.
+- [x] **Local LTX/Wan generation on gin** (the scale answer — fal per-clip can't scale: 20/day ≈ $330+/mo).
+      gin = RTX PRO 6000 96GB, ComfyUI 0.24.1 @ `127.0.0.1:8188` (driven via `ssh gin`, behind CF Access
+      so no service token needed). Models present: **LTX-2.3 22B** (+distilled/spatial-upscaler LoRAs),
+      **Wan 2.2 14B i2v** (+lightx2v 4-step speed LoRAs), RealESRGAN_x4plus_anime_6B. Starter workflows
+      staged → `gin:~/dev/ComfyUI/user/default/workflows/monet/` + versioned in repo `workflows/`
+      (`wan2_2_i2v` runs as-is; `ltx2_3_i2v` + `_lora` patched to installed models). See `workflows/README.md`.
+- [ ] **Build: LTX‖Wan parallel subgraph workflow + standalone `video_upscale.json`** (RealESRGAN per-frame
+      "additional upscaler pass"), LoRA loaders exposed. Then drive headless via `ssh gin → :8188/prompt`.
+      (Jin is hand-editing the 3 starters first.)
+- [ ] **A `monet` CLI for Monetto** (Jin's idea — "a tool just for you") — fold `seedance.py` (gen) +
+      `ig-videos.sh` (compose/text) into one CLI: `monet gen|post|animate`. Build after the first post ships.
+- [ ] **Pick-best loop** (later) — generate N cheap variants → aesthetic-score → post top 1, correct with IG insights.
+- [ ] **IG video batch 1 (charm funnel)** — 10 postable Reels specced in `docs/013-ig-videos.md`,
+      each mapped to a real `contents/monet/` clip + on-screen text + caption. Next: cut the top 3
+      (#2 cast / #3 flower / #6 dance) — composite stacked-alpha → bg → PIL text overlay → loop.
+      Batch 2 = garden-gameplay videos once the garden scene exists.
+
+## Console (admin web app — console.monet.sprited.ai)
+
+- [x] **Scaffold `console/`** — React 19 + Radix + Hono on Cloudflare Workers (mirrors v1; seed template
+      for future apps). `deploy-console.yml` added. Service-token proxy pattern verified locally
+      (comfy + ollama both reachable through the Worker).
+- [x] **Goal locked: video-gen conversational AI prototype (Jin-only) on RAW `claude` CLI** (+skills/MCPs
+      optionally). Architecture: **console.monet.sprited.ai = CF Worker** (front door, R2 for videos,
+      Jin-only via CF Access) → `/api/chat` proxies (SSE, service token) → **gin claude-bridge**
+      (`console/server.mjs`, pure Node, spawns `claude -p --output-format stream-json --include-partial-messages
+      --permission-mode bypassPermissions`, cwd=`/home/gin/dev/monet`). Brain on gin, surface+storage on CF.
+      Verified: `claude -p` authed on gin (PONG); bridge serves on gin:8790; Worker builds. App.tsx = streaming
+      chat (text deltas + tool chips + session resume).
+- [ ] **Go live (needs Jin's CF dashboard steps first, then deploy):**
+      1. Jin — Tunnel: **remove** public hostname `console.monet.sprited.ai` (free it for the Worker).
+      2. Jin — Tunnel: **add** `agent.monet.sprited.ai` → `http://localhost:8790`.
+      3. Jin — Access: app on `agent.monet.sprited.ai` with the **service-token** policy (so the Worker can call it).
+      4. Monetto — commit `console/` → CI deploys Worker (provisions `console.monet` custom domain) +
+         `wrangler secret put CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` (or Jin runs it).
+      5. gin bridge persistence: currently `nohup`; make a systemd unit later.
+- [ ] **Then: wire video-gen as Monetto's tools** — it already has `scripts/seedance.py` (fal), `scripts/ui2api.py`
+      + `workflows/` (local LTX/Wan on gin), and can push results to R2 for the Worker to serve. Skills/MCPs optional.
+- [ ] **Deploy console** — commit → CI provisions `console.monet.sprited.ai` (like v1). Then: (a) set
+      `wrangler secret put CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`; (b) **Jin adds a Cloudflare
+      Access policy on the hostname** (admin-only gate). ⚠️ outward-facing — confirm before deploy.
+- [x] **Pivot: console = conversational agent (Monetto chat)** — ChatGPT-style streaming chat UI
+      (`console/src/App.tsx`) talking to **Qwen via `ollama.sprited.ai`** (default
+      `huihui_ai/qwen2.5-abliterate:14b`; also gemma4:*, **qwen3-coder:30b** for tool-calling later).
+      Same CF Access service token guards comfy + ollama; Worker proxies `/api/ollama/*` (streaming
+      NDJSON) and `/api/comfy/*`. Verified end-to-end locally (tags + Korean chat reply). Model picker + bubbles.
+- [ ] **Tune Monetto chat** — persona/system prompt sharpening; pick best model (abliterated-14b reply
+      was rough; try qwen3-coder:30b / gemma4); message history persistence.
+- [ ] **Tool-calling: video generation from chat** (deferred per Jin) — agent fires ComfyUI via the
+      `ui2api.py` converter (`scripts/ui2api.py`, written) → `/prompt` → poll → preview. Wire as an
+      Ollama tool/function once chat persona is good. (Wan i2v API graph still to be validated on gin.)
+
 ## Experiments
 
 - [x] Get `bizarre-pose-estimator` running locally (native arm64, CPU) — anime/illustration

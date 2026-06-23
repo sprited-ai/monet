@@ -1,5 +1,6 @@
 # macOS
 .DS_Store
+.venv
 
 # Logs
 logs
@@ -181,3 +182,9 @@ contents/monet/source/
 # scratch analysis renders
 /idle*-compare.mp4
 contents/monet/archived/sample_animated_webp.webp
+
+# generated videos (Seedance i2v output — heavy, regen via scripts/seedance.py)
+/ig/gen/
+/ig/posts/
+# local secrets (FAL_KEY etc.) — never commit
+.env.local
