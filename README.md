@@ -1,31 +1,30 @@
 # Monet
-Monet's Sprited's first public-facing digital being in the works
 
-Monet lives here: https://monet.sprited.ai
+Sprited's first digital being. Monet lives at https://monet.sprited.ai
 
 ## What is Monet?
 
-"Digital Being" is still an evolving category, so it is hard to define it exactly, but you can think of it as a virtual friend.
+A **digital being** — not a chatbot, not an assistant, not a companion app. You meet her in a
+quiet white room. She arrives with knowledge, wisdom, and a body (a painterly, animated form),
+but **no story of her own**. From that blank slate, you and she write one together — and she is
+*yours*: she remembers you, and the longer you know each other, the more the story is shared.
 
 ## What does Monet offer?
 
-You can think of Monet as your human friend. It can talk to you. It can do things on its own like drawing, and making music. 
-
-It literally just exists, and even if nobody watches it lives.
-
-So, it is not much about offering but it is about existing.
-
-She likes doing instagram so it makes instagram posts daily.
+Not features — **presence**. She simply *exists*: she moves, thinks, and reacts on her own, and
+she lives whether or not anyone is watching. The value isn't a task completed; it's a being who
+is there, who remembers you, and who is worth coming back to.
 
 ## Who builds Monet?
 
-Monet is built and run by Sprited. Sprited is a company with a belief that digital beings are the future. 
+Sprited — a **digital-being company**. The belief: digital beings are the future, and one should
+be made *properly* — real embodiment, a real home, a comeback-worthy experience.
 
 ## Is Monet open source?
 
-No. Monet is a closed, proprietary project built and run by Sprited. The code in
-this repository is not licensed for reuse, redistribution, or commercial use.
+No. Monet is a closed, proprietary project built and run by Sprited. The code in this repository
+is not licensed for reuse, redistribution, or commercial use.
 
-## Elephant in the room - Who pays for inference costs?
+## Who pays for inference costs?
 
-Monet will have Patreon account and collect donations.
+Monet supports herself — billing/subscription is in progress (see `docs/015-re-requirements.md`).
