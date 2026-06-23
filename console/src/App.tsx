@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { Theme, Flex, Box, Text, TextArea, IconButton, Badge, ScrollArea, Spinner, Code } from '@radix-ui/themes'
-import { PaperPlaneIcon } from '@radix-ui/react-icons'
+import { PaperPlaneIcon, Pencil2Icon } from '@radix-ui/react-icons'
 
 type Part = { kind: 'text'; text: string } | { kind: 'tool'; name: string }
 type Msg = { role: 'user' | 'assistant'; parts: Part[] }
+
+// Persist the transcript + claude session id so a page refresh resumes the SAME
+// claude session (--resume) instead of orphaning it. (Continuity — see docs/012.)
+const STORE = 'monet-console-chat'
+function loadSaved(): { sessionId: string | null; msgs: Msg[] } {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || '{}')
+    return { sessionId: s.sessionId ?? null, msgs: Array.isArray(s.msgs) ? s.msgs : [] }
+  } catch {
+    return { sessionId: null, msgs: [] }
+  }
+}
 
 function Bubble({ m }: { m: Msg }) {
   const mine = m.role === 'user'
@@ -40,15 +52,24 @@ function Bubble({ m }: { m: Msg }) {
 }
 
 export default function App() {
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const saved = useRef(loadSaved())
+  const [msgs, setMsgs] = useState<Msg[]>(saved.current.msgs)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const sessionRef = useRef<string | null>(null)
+  const sessionRef = useRef<string | null>(saved.current.sessionId)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    // persist transcript + session id (sessionRef updates alongside msgs during streaming)
+    localStorage.setItem(STORE, JSON.stringify({ sessionId: sessionRef.current, msgs }))
   }, [msgs])
+
+  function newChat() {
+    sessionRef.current = null
+    setMsgs([])
+    localStorage.removeItem(STORE)
+  }
 
   // append text to the trailing text part of the last assistant msg (or start one)
   function pushDelta(delta: string) {
@@ -126,6 +147,11 @@ export default function App() {
           <Badge color="green" variant="soft">
             claude code · gin
           </Badge>
+          <Box style={{ marginLeft: 'auto' }}>
+            <IconButton variant="ghost" color="gray" onClick={newChat} title="새 대화" disabled={busy}>
+              <Pencil2Icon />
+            </IconButton>
+          </Box>
         </Flex>
 
         <ScrollArea ref={scrollRef as any} style={{ flex: 1 }}>
