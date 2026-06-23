@@ -167,7 +167,10 @@ export default function Whiteroom() {
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      renderer.current?.zoomBy(Math.pow(1.0016, -e.deltaY))
+      // Trackpad pinch arrives as ctrl+wheel with tiny deltas → needs a much larger
+      // gain than a mouse wheel (big deltas) to feel responsive.
+      const k = e.ctrlKey ? 0.02 : 0.0016
+      renderer.current?.zoomBy(Math.exp(-e.deltaY * k))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
