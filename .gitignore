@@ -170,8 +170,16 @@ nsfw-*
 sensitive-*/
 confidential-*/
 confidential/
-# external clone: 2.7GB of model weights, not tracked here
-experiments/bizarre-pose-estimator/
+# bizarre-pose-estimator: a vendored upstream clone + ~2.7GB of model weights +
+# a venv — all local-only. Track ONLY the tooling WE wrote on top of it.
+experiments/bizarre-pose-estimator/*
+!experiments/bizarre-pose-estimator/_scripts/
+experiments/bizarre-pose-estimator/_scripts/*
+!experiments/bizarre-pose-estimator/_scripts/exp_monet_pose.py
+!experiments/bizarre-pose-estimator/_scripts/pose_batch.py
+!experiments/bizarre-pose-estimator/_scripts/pose_data.py
+!experiments/bizarre-pose-estimator/_scripts/pose_webm.py
+!experiments/bizarre-pose-estimator/RUN_NOTES.md
 
 contents/monet/pose_out/
 # playwright MCP scratch
