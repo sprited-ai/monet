@@ -1,144 +1,66 @@
 # Backlog
 
-- [ ] Read "../anima/v34"
-- [ ] Create v1 following "../anima/v34".
+> **Re-scoped 2026-06-23 → `docs/015-re-requirements.md`.** The project is now ONLY the **Whiteroom**:
+> Monet as a *living being* (not a companion) in a white room at `monet.sprited.ai` — clean-slate
+> character that writes a story *with* the user; first-5-seconds-convincing; cozy; comeback-worthy.
+> **Out of scope (archived → `archived/`):** Instagram posts, social video generation, the "Monet's
+> Garden" game concept, marketing/GTM, the local-homelab video-gen pipeline. **Target: whiteroom +
+> billing live by ~July 20.**
 
-## v1 (White Room app)
+## Whiteroom (active — the only focus)
 
-- [x] Scaffold v1 hello-world: React 19 + Radix Themes 3.3.0 + Hono on Cloudflare
-      Workers via `@cloudflare/vite-plugin` (mirrors `../sprite-dx/ui` setup). `/api/hello`
-      Hono route + SPA. `pnpm dev` (port 8788) / `pnpm build` / `pnpm deploy`. Verified
-      end-to-end in browser. Stack validated against current Cloudflare best practice (2026).
-- [x] Adopt repo conventions: `v*` disposable-island prototypes + shared root assets;
-      **pnpm project-wide** (no workspace — islands stay independent, store dedupes disk).
-      tsconfigs under `v1/conf/`. Documented in `docs/007-repo-structure.md`.
-- [x] CI/CD: push to `main` → GitHub Actions builds & deploys each changed `v*` to
-      `monet-v*.sprited.ai` (custom_domain route per worker). Config + workflow in repo;
-      config validated via `wrangler deploy --dry-run`. See `docs/007-repo-structure.md`.
-- [x] CI secrets in place + first deploy live: **monet-v1.sprited.ai** (custom domain provisioned,
-      API + SPA verified in prod). Workflow simplified to one file per version (`deploy-v1.yml`).
-- [x] Assets → R2: `contents/` mirrors to bucket `monet-contents` (sync-contents.yml, incremental
-      via in-bucket manifest). Backfilled 90 objects.
-- [x] `/editor` — previews all contents (animations + stills) with filter; hover to play. Worker
-      exposes a single `/contents` resource (list + `/contents/<key>` stream). **Dev pulls from
-      local `contents/` via a Vite middleware (R2 bypassed); prod serves from R2.** `worker/` → `api/`.
-- [x] **Video-rendering decision (docs/008):** Pixi (canvas/WebGL) + **stacked-alpha H.264**
-      (color top / alpha-as-luma bottom, shader composites). Proven transparent + animating in
-      **Chrome AND Safari** (autoplay gesture-gated = on-narrative "click to come alive"); stacked
-      979 KB < source webm 1.8 MB. webm stays the R2 source; stacked is a CI-derived delivery.
-      POC: `experiments/stacked-alpha-poc/`.
-- [x] **Transform all → stacked .mp4 delivery:** 64 clips webm→stacked-H.264 (41 MB vs 96 MB);
-      originals backed up to `contents/monet/source/` (gitignored). Colocated `<name>.thumbnail.webp`
-      (native size, q90) for the grid; `WebGL StackedVideo` composite on hover. Editor draws an
-      origin crosshair. Pipeline (worker/middleware/measure/sync) switched .webm→.mp4; sync honors
-      `.gitignore`. Internal dirs `source|pose_out|archived` + `*.thumbnail.*` hidden from `/contents`.
-- [x] **Screenshot (visual-regression) tests** — Playwright over `/`, `/editor`, `/preview`.
-      Animated WebGL stage made deterministic via `?test=1` (Stage `freezeAt` seeks+holds a single
-      frame, sets canvas `data-ready`; `preserveDrawingBuffer` only in test so full-page captures
-      aren't blank). Preview-wide/zoom lock the viewport-rect fix (no side crop, no distortion).
-      Baselines in `v1/tests/__screenshots__`. `pnpm test` / `pnpm test:update`.
-- [x] **Monet Studio (`/studio`)** — toy-play story stage (prototype): animated Monet (APNG-alpha
-      clips drawn to canvas) + draggable toys + narrator caption + **play & record** (canvas+mic→webm)
-      + PNG snapshot. **Continuity**: the scene persists (localStorage) and Monet greets you with
-      time-since-last-visit + "a flower bloomed while you were away" — a first taste of being
-      remembered (see `docs/012-monetto-body.md`). `v1/src/Studio.tsx`. Heavy APNG clips gitignored —
-      regen with `scripts/studio-clips.sh`; degrades to a static Monet pose if absent.
-- [ ] **Editor: keyframe thumbnail picker** (later) — scrub a clip, pick the frame, save it as
-      `<name>.thumbnail.webp` (native size, so it just swaps which frame). Local-generated for now.
-- [ ] **Sidecar `<name>.json`** (not started) — hand-authored loop {in,out}, name, kind, tags.
-      Comes with the trim UI; the player reads it for loop-segment playback.
-- [ ] Build: **stacked-H.264 derivative CI** — push `contents/**` source → ubuntu (ffmpeg w/ libvpx)
-      decode VP9 alpha → vstack → x264 + thumbnail → R2, changed-files-only. (now done locally.)
-- [ ] Build: **Pixi player** — stacked-alpha shader, sprite anchored at `origin`, loop in/out
-      (trim), gesture-to-play. Powers both `/editor` (per-clip trim UI) and the White Room.
-- [ ] Metadata: wire `/contents` to serve `index.json` (origin/framing/loop). Editor already reads
-      `index.json` + `framings.json` directly for the origin crosshair.
-- [ ] Assets domain when needed for public/CDN: `monet-assets.sprited.ai` → monet-contents
-      (per-project subdomain; keep `assets.sprited.ai` free for a future router).
-- [ ] Build the opening "encounter" sequence (white room → canvas → Renoir taps → Monet emerges).
-- [ ] Wire animation playback from R2; idle loop + state transitions.
-- [ ] **Re-render `monet-jump-large-3`** — bad generative render: heavy temporal flicker on the
-      character body (per-pixel temporal 2nd-diff = 15.4 vs 5.5/6.4 for the clean siblings -1/-2;
-      36% of frames reverse brightness direction; a luma flash to 48 at frames ~40–52, jitter tail
-      at 110–118). Flicker is baked into the **source webm**, not the mp4 transcode. Post-process
-      deflicker (`atadenoise`+`deflicker`) fixes only 57% of global pumping / 7% of local flicker —
-      band-aid. Siblings are clean, so the pipeline is fine; regenerate -3 (new seed) or drop it.
+- [ ] **Whiteroom setup** — Monet (sprite character) alive in a white room at `monet.sprited.ai`.
+      Goal: *convince in the first 5 seconds*; already-good the moment you land; cozy (cf. lunamachi).
+- [ ] **Core-loop proof** — is it come-back-worthy? fun? gives dopamine / emergent / addictive?
+      (Provable without daily IG — just needs to feel alive to Jin first.)
+- [ ] **Living-being model** — *not a companion, a living being, and the user's OWN.* Clean slate:
+      has knowledge·wisdom·embodiment but **no backstory of its own**; from blank, it interacts and
+      *writes a story together* with the user. Per-user memory = the bond/moat (buy-first: Honcho/Mem0).
+- [ ] **Auth** — Anonymous login (OpenAI style) + real Login.
+- [ ] **GDPR / Privacy / Trust & Safety.**
+- [ ] **Admin website** (monet-console may serve this — see Live infra).
+- [ ] **Sprite eye-control limitation** — sprites can't move eyes independently. Fix: brute-force sprite
+      edits, OR send to image-2 / nano-banana-pro for per-direction states + separated eyes (enough to read as alive).
+- [ ] **Billing** — add before the July-20 target.
 
-## Content / GTM
+## Foundation (done — the whiteroom rendering stack stays)
 
-- [x] **Seedance i2v generation pipeline** — `scripts/seedance.py` animates a still → video via
-      fal.ai (Seedance 1.0-pro / 2.0 / 2.0-fast; queue API, FAL_KEY in `.env.local`, `generate_audio`
-      off by default to dodge fal's partner-validation audio false-positives). 9:16 Reel finish =
-      blurred-fill composite. **Verdict: 2.0 >> 1.0-pro** (real camera move + dynamic motion; 1.0 = static puppet).
-      **Cost:** fal is priciest (~$0.3/s 1080p) → for iteration use `--model seedance-2.0-fast --resolution 480p`
-      then free-upscale via comfy.sprited.ai; if volume grows switch provider to Atlas Cloud (~$0.08/s, 1/3 of fal).
-- [ ] **First IG post asset: umbrella-rain** — `ig/gen/umbrella-rain_FINAL.mp4` (dynamic twirl, 1080×1920).
-      Jin posts manually to @monet.sprited (add trending audio in-app; it's silent). Caption drafted.
-- [ ] **IG Graph API auto-posting** (deferred — manual for now) — needs @monet.sprited → Professional +
-      FB Page + Meta app + long-lived token + IG_USER_ID in `.env.local`; video must be a public URL
-      (push to R2 `monet-contents`). Graph API can't add trending audio. Wire publish (container→publish) when ready.
-- [x] **Local LTX/Wan generation on gin** (the scale answer — fal per-clip can't scale: 20/day ≈ $330+/mo).
-      gin = RTX PRO 6000 96GB, ComfyUI 0.24.1 @ `127.0.0.1:8188` (driven via `ssh gin`, behind CF Access
-      so no service token needed). Models present: **LTX-2.3 22B** (+distilled/spatial-upscaler LoRAs),
-      **Wan 2.2 14B i2v** (+lightx2v 4-step speed LoRAs), RealESRGAN_x4plus_anime_6B. Starter workflows
-      staged → `gin:~/dev/ComfyUI/user/default/workflows/monet/` + versioned in repo `workflows/`
-      (`wan2_2_i2v` runs as-is; `ltx2_3_i2v` + `_lora` patched to installed models). See `workflows/README.md`.
-- [ ] **Build: LTX‖Wan parallel subgraph workflow + standalone `video_upscale.json`** (RealESRGAN per-frame
-      "additional upscaler pass"), LoRA loaders exposed. Then drive headless via `ssh gin → :8188/prompt`.
-      (Jin is hand-editing the 3 starters first.)
-- [ ] **A `monet` CLI for Monetto** (Jin's idea — "a tool just for you") — fold `seedance.py` (gen) +
-      `ig-videos.sh` (compose/text) into one CLI: `monet gen|post|animate`. Build after the first post ships.
-- [ ] **Pick-best loop** (later) — generate N cheap variants → aesthetic-score → post top 1, correct with IG insights.
-- [ ] **IG video batch 1 (charm funnel)** — 10 postable Reels specced in `docs/013-ig-videos.md`,
-      each mapped to a real `contents/monet/` clip + on-screen text + caption. Next: cut the top 3
-      (#2 cast / #3 flower / #6 dance) — composite stacked-alpha → bg → PIL text overlay → loop.
-      Batch 2 = garden-gameplay videos once the garden scene exists.
+- [x] v1 app scaffold (React 19 + Radix + Hono on CF Workers); repo conventions (`docs/007`); CI/CD to
+      `monet-v*.sprited.ai`; first deploy live (**monet-v1.sprited.ai**).
+- [x] Assets → R2 (`contents/` → `monet-contents`, incremental sync).
+- [x] **Stacked-alpha H.264 rendering** (color/alpha-as-luma, WebGL shader; Chrome+Safari) — `docs/008`.
+      64 clips transcoded; thumbnails; `WebGL StackedVideo`. **This is the whiteroom rendering core.**
+- [x] `/editor` (preview all contents, origin crosshair) + `/preview` + deterministic screenshot tests.
+- [x] `/studio` toy-play prototype (animated Monet on canvas + continuity/localStorage greeting) —
+      a first whiteroom-ish prototype (`v1/src/Studio.tsx`). Note: its record/IG bits are out-of-scope now.
 
-## Console (admin web app — console.monet.sprited.ai)
+## Render TODOs (whiteroom-relevant — kept)
 
-- [x] **Scaffold `console/`** — React 19 + Radix + Hono on Cloudflare Workers (mirrors v1; seed template
-      for future apps). `deploy-console.yml` added. Service-token proxy pattern verified locally
-      (comfy + ollama both reachable through the Worker).
-- [x] **Goal locked: video-gen conversational AI prototype (Jin-only) on RAW `claude` CLI** (+skills/MCPs
-      optionally). Architecture: **console.monet.sprited.ai = CF Worker** (front door, R2 for videos,
-      Jin-only via CF Access) → `/api/chat` proxies (SSE, service token) → **gin claude-bridge**
-      (`console/server.mjs`, pure Node, spawns `claude -p --output-format stream-json --include-partial-messages
-      --permission-mode bypassPermissions`, cwd=`/home/gin/dev/monet`). Brain on gin, surface+storage on CF.
-      Verified: `claude -p` authed on gin (PONG); bridge serves on gin:8790; Worker builds. App.tsx = streaming
-      chat (text deltas + tool chips + session resume).
-- [ ] **Go live (needs Jin's CF dashboard steps first, then deploy):**
-      1. Jin — Tunnel: **remove** public hostname `console.monet.sprited.ai` (free it for the Worker).
-      2. Jin — Tunnel: **add** `agent.monet.sprited.ai` → `http://localhost:8790`.
-      3. Jin — Access: app on `agent.monet.sprited.ai` with the **service-token** policy (so the Worker can call it).
-      4. Monetto — commit `console/` → CI deploys Worker (provisions `console.monet` custom domain) +
-         `wrangler secret put CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` (or Jin runs it).
-      5. gin bridge persistence: currently `nohup`; make a systemd unit later.
-- [ ] **Then: wire video-gen as Monetto's tools** — it already has `scripts/seedance.py` (fal), `scripts/ui2api.py`
-      + `workflows/` (local LTX/Wan on gin), and can push results to R2 for the Worker to serve. Skills/MCPs optional.
-- [ ] **Deploy console** — commit → CI provisions `console.monet.sprited.ai` (like v1). Then: (a) set
-      `wrangler secret put CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`; (b) **Jin adds a Cloudflare
-      Access policy on the hostname** (admin-only gate). ⚠️ outward-facing — confirm before deploy.
-- [x] **Pivot: console = conversational agent (Monetto chat)** — ChatGPT-style streaming chat UI
-      (`console/src/App.tsx`) talking to **Qwen via `ollama.sprited.ai`** (default
-      `huihui_ai/qwen2.5-abliterate:14b`; also gemma4:*, **qwen3-coder:30b** for tool-calling later).
-      Same CF Access service token guards comfy + ollama; Worker proxies `/api/ollama/*` (streaming
-      NDJSON) and `/api/comfy/*`. Verified end-to-end locally (tags + Korean chat reply). Model picker + bubbles.
-- [ ] **Tune Monetto chat** — persona/system prompt sharpening; pick best model (abliterated-14b reply
-      was rough; try qwen3-coder:30b / gemma4); message history persistence.
-- [ ] **Tool-calling: video generation from chat** (deferred per Jin) — agent fires ComfyUI via the
-      `ui2api.py` converter (`scripts/ui2api.py`, written) → `/prompt` → poll → preview. Wire as an
-      Ollama tool/function once chat persona is good. (Wan i2v API graph still to be validated on gin.)
+- [ ] **Pixi player** — stacked-alpha shader, sprite anchored at `origin`, loop in/out (trim), gesture-to-play.
+      Powers the whiteroom (and `/editor` trim UI).
+- [ ] Metadata: wire `/contents` to serve `index.json` (origin/framing/loop).
+- [ ] Opening **encounter** sequence (white room → canvas → Monet emerges).
+- [ ] Idle loop + animation-state transitions from R2.
+- [ ] **Re-render `monet-jump-large-3`** — baked-in source flicker (new seed or drop).
+- [ ] `monet-assets.sprited.ai` CDN subdomain when public delivery is needed.
 
-## Experiments
+## Live infra (kept — do not archive)
 
-- [x] Get `bizarre-pose-estimator` running locally (native arm64, CPU) — anime/illustration
-      pose estimator. Working on repo-root `.venv`. See
-      `experiments/bizarre-pose-estimator/RUN_NOTES.md` for the recipe (detectron2 source build,
-      `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1`, numpy-2 patch, new GDrive file ID). Excluded from git.
-- [ ] (maybe) Use bizarre-pose-estimator to extract COCO keypoints from Monet animation frames —
-      could feed pose-conditioned generation / consistency checks for the v1 animation pipeline.
-- [ ] **Rhythm-cast feel prototype** (`experiments/rhythm-cast-proto/`) — throwaway. Question:
-      does "rhythm performance → shapes the generative birth" (gen-AI 리듬게임) feel good? 3 cast
-      feels (lane/sigil/pulse); gen-AI faked as a procedural flower driven by accuracy/combo/runes.
-      **VERDICT pending** (see NOTES.md): rhythm-twitch vs cozy tone; which feel wins; fold into
-      card→materialize keystone or drop. → then delete/absorb.
+- **monet-v1.sprited.ai** (v1 app). **monet-console.sprited.ai** + **monet-agent** (gin systemd) —
+  Monetto = raw `claude` CLI behind CF Access (Jin-only), SSE chat, session-persisted. Kept as the
+  **admin/dev surface** (docs/015 lists "Admin website" in scope). Its leftover comfy/ollama/video-gen
+  proxy code is now out-of-scope cruft (harmless; trim later).
+
+## Archived 2026-06-23 (out-of-scope per docs/015 → `archived/`)
+
+- IG video-gen: `scripts/{seedance,ig_text,ig-videos}.{py,sh}`, `docs/013-ig-videos.md`.
+- Local-homelab gen: `workflows/` (LTX/Wan), `scripts/ui2api.py`.
+- Historical / IG / garden docs: `docs/001–006`, `009`, `010`, `011-story-bites`.
+- ⏳ **Pending Jin's call (untracked, not moved):** `ig/`, `experiments/comfy-mcp/`, `experiments/v0-template/`,
+  `docs/011-monets-garden-story.md`, `docs/012-jin-story.md`, `docs/014-monet-live-puppet.md`,
+  `docs/014-monetto-design.md`, `references/`, `.env.example` reconcile, `v1/README.md` reconcile.
+
+## Experiments (status unclear — Jin to decide)
+
+- [x] `bizarre-pose-estimator` running locally (anime pose keypoints; could check anim consistency).
+- [ ] `rhythm-cast-proto` — throwaway; verdict pending (likely out-of-scope now).
