@@ -41,15 +41,9 @@ function parseReply(text: string): { text: string; emotion: string } {
   return { text: t || '…', emotion: 'calm' }
 }
 
-function stub(last: string): string {
-  const lines = [
-    'Mm. I like that you said that.',
-    "I'm still new here — but I'm glad you're here too.",
-    'Say more? The room feels bigger when you talk.',
-    "I don't know much yet. I know I like this.",
-  ]
-  return lines[last.length % lines.length]
-}
+// Failures surface as a transparent ⚠ error string (not a fake in-character line),
+// so it's obvious the brain is offline/erroring rather than "Monet being weird".
+const err = (text: string) => ({ text: `⚠ ${text}`, emotion: 'calm' as const })
 
 app.post('/api/chat', async (c) => {
   const body = await c.req.json<{ messages?: ChatMsg[] }>().catch(() => ({}) as { messages?: ChatMsg[] })
@@ -57,10 +51,10 @@ app.post('/api/chat', async (c) => {
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-16)
     .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }))
-  if (!messages.length) return c.json({ text: 'Hello. You found me.', emotion: 'curious' })
+  if (!messages.length) return c.json(err('no message'))
 
   const key = c.env.ANTHROPIC_API_KEY
-  if (!key) return c.json({ text: stub(messages[messages.length - 1].content), emotion: 'curious' })
+  if (!key) return c.json(err('brain offline — ANTHROPIC_API_KEY not set'))
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -74,14 +68,15 @@ app.post('/api/chat', async (c) => {
       }),
     })
     if (!res.ok) {
-      console.warn('anthropic', res.status, await res.text().catch(() => ''))
-      return c.json({ text: '(my mind is far away just now.)', emotion: 'calm' })
+      const detail = await res.text().catch(() => '')
+      console.warn('anthropic', res.status, detail)
+      return c.json(err(`brain error ${res.status} ${detail.slice(0, 200)}`.trim()))
     }
     const data = (await res.json()) as { content?: { text?: string }[] }
     return c.json(parseReply(data?.content?.[0]?.text ?? ''))
   } catch (e) {
     console.warn('chat error', e)
-    return c.json({ text: "(I couldn't quite reach my thoughts.)", emotion: 'calm' })
+    return c.json(err(`brain unreachable — ${e instanceof Error ? e.message : String(e)}`))
   }
 })
 

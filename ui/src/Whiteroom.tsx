@@ -117,11 +117,12 @@ export default function Whiteroom() {
         })
         const data = await r.json()
         reply = { text: (data.text || '').trim(), emotion: (data.emotion || 'calm') as Emotion }
-      } catch {
-        reply = { text: 'I can hear you, but my mind went quiet for a second.', emotion: 'calm' }
+      } catch (e) {
+        // transparent error, not a fake in-character line
+        reply = { text: `⚠ network error — ${e instanceof Error ? e.message : 'fetch failed'}`, emotion: 'calm' }
       }
       thinking.current = false
-      if (!reply.text) reply.text = '…'
+      if (!reply.text) reply.text = '⚠ empty reply'
       history.current.push({ role: 'assistant', content: reply.text })
 
       const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
