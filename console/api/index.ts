@@ -37,7 +37,12 @@ async function proxyAgent(c: Context<{ Bindings: Bindings }>, path: string) {
   }
   const resp = await fetch(`${base}${path}`, init)
   const headers = new Headers(resp.headers)
-  headers.delete('content-encoding')
+  // Strip hop-by-hop / connection headers — forwarding the origin's `connection:
+  // keep-alive` etc. through the Worker corrupts connection reuse and (with SSE)
+  // breaks Cloudflare Access's session-cookie handling on the *next* request.
+  for (const h of ['connection', 'keep-alive', 'transfer-encoding', 'content-encoding', 'content-length']) {
+    headers.delete(h)
+  }
   headers.set('cache-control', 'no-cache')
   return new Response(resp.body, { status: resp.status, headers })
 }

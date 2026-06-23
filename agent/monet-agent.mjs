@@ -94,7 +94,6 @@ const server = createServer((req, res) => {
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
-        connection: 'keep-alive',
       })
       if (!message) {
         sse(res, 'error', { message: 'empty message' })
