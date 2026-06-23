@@ -55,7 +55,7 @@ export class Renderer {
 
   // Wheel zoom: multiply the dolly target, clamped, then eased in computeCamera.
   zoomBy(factor: number) {
-    this.zoomTarget = Math.min(2.6, Math.max(0.6, this.zoomTarget * factor))
+    this.zoomTarget = Math.min(2.6, Math.max(0.25, this.zoomTarget * factor))
   }
 
   private computeCamera() {
