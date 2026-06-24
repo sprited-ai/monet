@@ -33,6 +33,16 @@ export async function loadUser(db: D1Database, uid: string, now: number): Promis
   return { turns: u?.turns ?? 1, memories: (rows.results ?? []).map((r) => r.content) }
 }
 
+// Pure read (no upsert, no turn bump) — for the debug view "what she remembers".
+export async function readMemories(db: D1Database, uid: string): Promise<UserMemory> {
+  const u = await db.prepare(`SELECT turns FROM users WHERE id = ?`).bind(uid).first<{ turns: number }>()
+  const rows = await db
+    .prepare(`SELECT content FROM memories WHERE user_id = ? ORDER BY created_at ASC LIMIT 200`)
+    .bind(uid)
+    .all<{ content: string }>()
+  return { turns: u?.turns ?? 0, memories: (rows.results ?? []).map((r) => r.content) }
+}
+
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
 // Persist newly-learned facts, skipping any we already hold (case-insensitive exact

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { loadUser, remember, validUid, type UserMemory } from './memory'
+import { loadUser, readMemories, remember, validUid, type UserMemory } from './memory'
 
 type Bindings = {
   ASSETS: Fetcher
@@ -123,6 +123,19 @@ app.post('/api/chat', async (c) => {
   } catch (e) {
     console.warn('chat error', e)
     return c.json(err(`brain unreachable — ${e instanceof Error ? e.message : String(e)}`))
+  }
+})
+
+// What Monet remembers about the caller (read-only; keyed by their own uid header).
+// Powers the debug overlay's memory view. Empty list if unknown/unbound — never errors.
+app.get('/api/memory', async (c) => {
+  const uid = validUid(c.req.header('x-monet-uid'))
+  if (!uid || !c.env.DB) return c.json({ turns: 0, memories: [] } satisfies UserMemory)
+  try {
+    return c.json(await readMemories(c.env.DB, uid))
+  } catch (e) {
+    console.warn('mem read', e)
+    return c.json({ turns: 0, memories: [] } satisfies UserMemory)
   }
 })
 

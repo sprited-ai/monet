@@ -450,8 +450,20 @@ export default function Whiteroom() {
   )
 }
 
-// Backtick debug: toggle the embedded effects + nudge the camera, live.
+// Backtick debug: toggle the embedded effects + nudge the camera, live, and show
+// what Monet remembers about you (fetched fresh each time the panel opens).
 function DebugPanel({ r, onChange }: { r: Renderer; onChange: () => void }) {
+  const [mem, setMem] = useState<{ turns: number; memories: string[] } | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch('/api/memory', { headers: { 'x-monet-uid': getUid() } })
+      .then((res) => res.json())
+      .then((m) => alive && setMem(m))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
   const row = (label: string, node: React.ReactNode) => (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
       <span>{label}</span>
@@ -512,6 +524,14 @@ function DebugPanel({ r, onChange }: { r: Renderer; onChange: () => void }) {
       {slider('eye y', r.cam.eye[1], 0, 3, 0.05, (v) => (r.cam.eye[1] = v))}
       {slider('eye z', r.cam.eye[2], 2, 9, 0.05, (v) => (r.cam.eye[2] = v))}
       {slider('look y', r.cam.target[1], 0, 2.5, 0.05, (v) => (r.cam.target[1] = v))}
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '4px 0' }} />
+      <div style={{ opacity: 0.6 }}>memory{mem ? ` · ${mem.turns} turns` : ' …'}</div>
+      {mem && mem.memories.length === 0 && <div style={{ opacity: 0.5 }}>(nothing yet — talk to her)</div>}
+      {mem?.memories.map((m, i) => (
+        <div key={i} style={{ opacity: 0.85, lineHeight: 1.35 }}>
+          • {m}
+        </div>
+      ))}
     </div>
   )
 }
