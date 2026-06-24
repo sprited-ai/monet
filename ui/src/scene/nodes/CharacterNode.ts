@@ -71,7 +71,7 @@ export class CharacterNode implements SceneNode {
     this.u = uniforms(gl, this.prog, [
       'u_view', 'u_proj', 'u_pos', 'u_quad', 'u_right', 'u_feet', 'tA', 'tB', 'mixv', 'feather',
       'quadAspect', 'ancA', 'ancB', 'base', 'sclA', 'sclB', 'fasA', 'fasB', 'u_ambient',
-      'uMouthA', 'uMouthB', 'uSkinA', 'uSkinB', 'uBoxA', 'uBoxB', 'uHasA', 'uHasB', 'uMargin',
+      'uMouthA', 'uMouthB', 'uSkinA', 'uSkinB', 'uBoxA', 'uBoxB', 'uHasA', 'uHasB', 'uMargin', 'uMouthFeather',
     ])
     this.slots = [0, 1].map(() => ({
       clip: null as StreamingClip | null,
@@ -264,7 +264,10 @@ export class CharacterNode implements SceneNode {
     gl.uniform3fv(this.u.uSkinB, mB.skin)
     gl.uniform4fv(this.u.uBoxB, mB.box)
     gl.uniform1f(this.u.uHasB, mB.has)
-    gl.uniform1f(this.u.uMargin, 0.012) // analytic dilation/feather (u-space); bigger than the old 0.006 per Jin
+    // Mouth erase reach (u-space; frame is 640px so 1.0 = 640px). Erase is solid out to
+    // uMargin (~10px dilation), then feathers OUTWARD over uMouthFeather (~5px).
+    gl.uniform1f(this.u.uMargin, 0.016)
+    gl.uniform1f(this.u.uMouthFeather, 0.008)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 

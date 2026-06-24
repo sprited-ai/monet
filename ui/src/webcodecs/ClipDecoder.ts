@@ -85,7 +85,6 @@ export class StreamingClip {
   private config!: VideoDecoderConfig
   private decoder: VideoDecoder | null = null
   private cache = new Map<number, VideoFrame>()
-  private decodeNext = 0 // index the decoder's next output will have
   private feedNext = 0 // next chunk index to feed
   private want = 0 // current target index (from the consumer)
   private closed = false
@@ -123,7 +122,6 @@ export class StreamingClip {
     }
     for (const f of this.cache.values()) f.close()
     this.cache.clear()
-    this.decodeNext = 0
     this.feedNext = 0
     this.decoder = new VideoDecoder({
       output: (frame) => {
@@ -131,8 +129,13 @@ export class StreamingClip {
           frame.close()
           return
         }
-        this.cache.set(this.decodeNext, frame)
-        this.decodeNext++
+        // Index by PRESENTATION timestamp, NOT output order. Decoders emit B-frames in
+        // DECODE order (Safari does — Chrome happened to reorder to presentation), so
+        // output-order indexing jumbled playback (the "1 3 2 4 3 5" tic). timestamp is the
+        // chunk cts we set, in µs → round to the frame index.
+        const i = Math.round((frame.timestamp / 1e6) * this.fps)
+        this.cache.get(i)?.close() // replace if we somehow re-decoded this index
+        this.cache.set(i, frame)
         // evict frames that fell well behind the play head
         for (const [k, f] of this.cache) {
           if (k < this.want - this.BEHIND) {
@@ -151,10 +154,12 @@ export class StreamingClip {
   private pump() {
     const dec = this.decoder
     if (!dec || this.closed) return
-    // feed chunks while the decoder is within AHEAD of the target and its queue is shallow
+    // Feed chunks (decode order) until we've supplied roughly want+AHEAD frames and the
+    // decoder's in-flight queue is shallow. chunk index ≈ presentation index ± B-frame
+    // reorder (a few), so this keeps the window around `want` populated.
     while (
       this.feedNext < this.chunks.length &&
-      this.decodeNext + dec.decodeQueueSize <= this.want + this.AHEAD &&
+      this.feedNext <= this.want + this.AHEAD &&
       dec.decodeQueueSize < 4
     ) {
       dec.decode(this.chunks[this.feedNext++])
@@ -167,13 +172,12 @@ export class StreamingClip {
   frameAt(index: number): { frame: VideoFrame; index: number } | null {
     if (this.total === 0) return null
     index = ((index % this.total) + this.total) % this.total
-    const minKey = this.cache.size ? Math.min(...this.cache.keys()) : this.decodeNext
-    if (!this.cache.has(index) && index < minKey) {
-      // backward jump (scrub-back or loop wrap) past what we still hold → restart from 0
-      this.want = index
+    this.want = index
+    // Backward jump (scrub-back or loop wrap) past everything we still hold → the frame can
+    // only be reached by decoding from the keyframe again (single-GOP) → restart from 0.
+    if (this.cache.size > 0 && !this.cache.has(index) && index < Math.min(...this.cache.keys())) {
       this.startDecoder()
     } else {
-      this.want = index
       this.pump()
     }
     const exact = this.cache.get(index)

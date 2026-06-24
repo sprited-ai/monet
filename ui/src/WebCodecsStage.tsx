@@ -24,7 +24,7 @@ const VS = `attribute vec2 p;varying vec2 uv;void main(){uv=vec2((p.x+1.)/2.,(1.
 const FS = `precision mediump float;varying vec2 uv;
 uniform sampler2D t;uniform float fw;uniform float zoom;uniform float scl;uniform float fas;uniform float aspect;
 uniform vec2 anc;uniform vec2 base;
-uniform vec2 uMouth[16];uniform vec3 uSkin;uniform vec4 uBox;uniform float uHasMouth;uniform float uMargin;
+uniform vec2 uMouth[16];uniform vec3 uSkin;uniform vec4 uBox;uniform float uHasMouth;uniform float uMargin;uniform float uMouthFeather;
 float sdPoly(vec2 p, vec2 v[16]){
   float d=dot(p-v[0],p-v[0]); float s=1.0; vec2 vj=v[15];
   for(int i=0;i<16;i++){
@@ -42,8 +42,9 @@ void main(){
   vec2 u=vec2(anc.x+(uv.x-0.5)*aspect/(k*fas), anc.y+(uv.y-base.y)/k);
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0){ gl_FragColor=vec4(0.0); return; }
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
-  if(uHasMouth>0.5 && u.x>uBox.x-uMargin && u.x<uBox.z+uMargin && u.y>uBox.y-uMargin && u.y<uBox.w+uMargin){
-    float cover=1.0-smoothstep(uMargin-0.004,uMargin+0.004,sdPoly(u,uMouth));
+  float reach=uMargin+uMouthFeather;
+  if(uHasMouth>0.5 && u.x>uBox.x-reach && u.x<uBox.z+reach && u.y>uBox.y-reach && u.y<uBox.w+reach){
+    float cover=1.0-smoothstep(uMargin,uMargin+uMouthFeather,sdPoly(u,uMouth));
     rgb=mix(rgb,uSkin,cover);
   }
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
@@ -84,7 +85,7 @@ export default function WebCodecsStage({
   feather = 0.01,
   mouth = null,
   mouthMode = 'erase',
-  mouthMargin = 0.012,
+  mouthMargin = 0.016,
   pose = null,
   s3body = null,
   face = null,
@@ -154,7 +155,7 @@ export default function WebCodecsStage({
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0]))
     const U = (n: string) => gl.getUniformLocation(pr, n)
     const uT = U('t'), uFw = U('fw'), uZoom = U('zoom'), uScl = U('scl'), uFas = U('fas'), uAspect = U('aspect')
-    const uAnc = U('anc'), uBase = U('base'), uMouth = U('uMouth'), uSkin = U('uSkin'), uBox = U('uBox'), uHasMouth = U('uHasMouth'), uMargin = U('uMargin')
+    const uAnc = U('anc'), uBase = U('base'), uMouth = U('uMouth'), uSkin = U('uSkin'), uBox = U('uBox'), uHasMouth = U('uHasMouth'), uMargin = U('uMargin'), uMouthFeather = U('uMouthFeather')
     gl.uniform1i(uT, 0)
 
     let cssW = 1, cssH = 1, dpr = 1, aspect = 1
@@ -246,6 +247,7 @@ export default function WebCodecsStage({
       }
       gl.uniform1f(uHasMouth, hasMouth)
       gl.uniform1f(uMargin, c.mouthMargin)
+      gl.uniform1f(uMouthFeather, 0.008) // ~5px outward feather (frame is 640px)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)

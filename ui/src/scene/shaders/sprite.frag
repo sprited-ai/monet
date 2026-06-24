@@ -22,7 +22,7 @@ uniform vec3 u_ambient;
 uniform vec2 uMouthA[16], uMouthB[16];
 uniform vec3 uSkinA, uSkinB;       // skin fill, straight 0..1
 uniform vec4 uBoxA, uBoxB;         // mouth AABB (x0,y0,x1,y1) for an early-out
-uniform float uHasA, uHasB, uMargin;
+uniform float uHasA, uHasB, uMargin, uMouthFeather;
 out vec4 o;
 
 // Signed distance to a 16-gon (IQ). Negative inside, positive outside, in u-space.
@@ -43,11 +43,12 @@ float sdPoly(vec2 p, vec2 v[16]) {
 vec3 erase(vec3 rgb, vec2 u, vec2 poly[16], vec3 skin, vec4 box, float has) {
   if (has < 0.5) return rgb;
   // AABB early-out: skip the 16-edge loop for fragments nowhere near the mouth.
-  if (u.x < box.x - uMargin || u.x > box.z + uMargin ||
-      u.y < box.y - uMargin || u.y > box.w + uMargin) return rgb;
+  float reach = uMargin + uMouthFeather; // erase covers this far past the polygon edge
+  if (u.x < box.x - reach || u.x > box.z + reach ||
+      u.y < box.y - reach || u.y > box.w + reach) return rgb;
   float d = sdPoly(u, poly);
-  float aa = 0.004;
-  float cover = 1.0 - smoothstep(uMargin - aa, uMargin + aa, d); // 1 inside (+dilate), 0 beyond
+  // Fully erased out to uMargin (the dilation), then feather OUTWARD over uMouthFeather.
+  float cover = 1.0 - smoothstep(uMargin, uMargin + uMouthFeather, d);
   return mix(rgb, skin, cover);
 }
 
