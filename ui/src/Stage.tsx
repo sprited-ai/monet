@@ -194,11 +194,25 @@ const SAM_COLORS: string[] = [
   '#00ff00', '#00ff00',
 ]
 
-// Draw the SAM-3D-Body rig: 65 colored bones + keypoint dots. `kp` = 70 normalized [x,y].
+// Compact label per keypoint (index order). Body parts spelled short; finger joints
+// are <side><finger><joint>: R/L · t·i·m·r·p (thumb/index/middle/ring/pinky) · 4=tip…1=base.
+const SAM_LABELS: string[] = [
+  'nose', 'eyeL', 'eyeR', 'earL', 'earR', 'shL', 'shR', 'elbL', 'elbR', 'hipL', 'hipR',
+  'knL', 'knR', 'ankL', 'ankR', 'toeLb', 'toeLs', 'heelL', 'toeRb', 'toeRs', 'heelR',
+  'Rt4', 'Rt3', 'Rt2', 'Rt1', 'Ri4', 'Ri3', 'Ri2', 'Ri1', 'Rm4', 'Rm3', 'Rm2', 'Rm1',
+  'Rr4', 'Rr3', 'Rr2', 'Rr1', 'Rp4', 'Rp3', 'Rp2', 'Rp1', 'wrR',
+  'Lt4', 'Lt3', 'Lt2', 'Lt1', 'Li4', 'Li3', 'Li2', 'Li1', 'Lm4', 'Lm3', 'Lm2', 'Lm1',
+  'Lr4', 'Lr3', 'Lr2', 'Lr1', 'Lp4', 'Lp3', 'Lp2', 'Lp1', 'wrL',
+  'olcL', 'olcR', 'cubL', 'cubR', 'acrL', 'acrR', 'neck',
+]
+
+// Draw the SAM-3D-Body rig: 65 colored bones + keypoint dots + name labels.
+// `kp` = 70 normalized [x,y]. Label index→name map: experiments/sam3d-body/README.
 function drawSamOverlay(
   ctx: CanvasRenderingContext2D,
   kp: [number, number][],
   project: (ux: number, uy: number) => [number, number],
+  labels = true,
 ) {
   ctx.lineWidth = 2
   for (let e = 0; e < SAM_EDGES.length; e++) {
@@ -213,6 +227,20 @@ function drawSamOverlay(
   for (const p of kp) {
     const P = project(p[0], p[1])
     ctx.beginPath(); ctx.arc(P[0], P[1], 1.8, 0, 7); ctx.fill()
+  }
+  if (labels) {
+    ctx.font = '8px ui-monospace, monospace'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 2.5
+    ctx.lineJoin = 'round'
+    for (let i = 0; i < kp.length; i++) {
+      const P = project(kp[i][0], kp[i][1])
+      const t = SAM_LABELS[i] ?? String(i)
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)' // halo so the text reads on any background
+      ctx.strokeText(t, P[0] + 4, P[1])
+      ctx.fillStyle = 'rgba(255,255,255,0.96)'
+      ctx.fillText(t, P[0] + 4, P[1])
+    }
   }
 }
 
@@ -342,14 +370,6 @@ export default function Stage({
   onFrameRef.current = onFrame
   const scrubRef = useRef(scrub) // null = autoplay; a number pins/pauses to that frame
   scrubRef.current = scrub
-  // requestVideoFrameCallback state: drive the frame index off the ACTUALLY-DISPLAYED
-  // frame (metadata.mediaTime), not video.currentTime — currentTime jumps on seek while
-  // the decoded frame lags, so the polygon would lead the video (worst on fast scrub).
-  const mediaT = useRef<[number, number]>([0, 0]) // latest presented frame time per slot
-  const vfDirty = useRef<[boolean, boolean]>([false, false]) // a new presented frame awaits upload
-  const vfHandles = useRef<[number, number]>([0, 0])
-  const texInit = useRef<[boolean, boolean]>([false, false]) // first real frame uploaded per slot
-  const hasRVFC = useRef(false)
 
   // GL setup + draw loop (two video textures, mixed by `mixv`).
   useEffect(() => {
@@ -358,26 +378,6 @@ export default function Stage({
     const b = vRef[1].current!
     a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
     b.muted = true
-    // Per-slot rVFC: record each presented frame's mediaTime + flag the texture dirty.
-    // Re-registers itself (one-shot API). Chrome + Safari/iOS support it; fallback below.
-    hasRVFC.current = 'requestVideoFrameCallback' in a
-    const regVF = (slot: 0 | 1, v: HTMLVideoElement) => {
-      const cb = (_now: number, meta: VideoFrameCallbackMetadata) => {
-        mediaT.current[slot] = meta.mediaTime
-        vfDirty.current[slot] = true
-        vfHandles.current[slot] = v.requestVideoFrameCallback(cb)
-      }
-      vfHandles.current[slot] = v.requestVideoFrameCallback(cb)
-    }
-    if (hasRVFC.current) {
-      regVF(0, a)
-      regVF(1, b)
-    }
-    // NOTE: we deliberately do NOT sync on `seeked`. seeked fires at decode-ready
-    // (~17ms) but texImage2D shows the COMPOSITOR-PRESENTED frame, which lands at the
-    // rVFC callback (~39ms). Keying mediaT to seeked made the overlay jump a frame
-    // before the texture could show it (the "rig leads the video" bug). rVFC fires on
-    // paused seeks too, so it alone keeps the overlay locked to the displayed frame.
     // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
     // capture after the buffer is composited+cleared, blanking the canvas. Keeping
     // the buffer makes the frozen frame survive any capture path. Off in normal use
@@ -479,16 +479,6 @@ export default function Stage({
     window.addEventListener('resize', sizeCanvas)
 
     let raf = 0
-    // The frame the user actually SEES. While scrubbing (paused) the displayed frame
-    // only advances on `seeked`, so use mediaT (kept by the seeked listener) — this is
-    // what locks the overlay to the video during scrub, regardless of rVFC. During
-    // playback use rVFC's presented mediaTime, else currentTime (legacy fallback).
-    // The frame the user actually SEES = the compositor-presented frame, whose time is
-    // mediaT (kept by rVFC, which fires on both playback and paused seeks). Tying the
-    // overlay to this — not currentTime — keeps it locked to the video. Legacy fallback
-    // (no rVFC): currentTime, which leads slightly.
-    const ftime = (slot: number, v: HTMLVideoElement) =>
-      hasRVFC.current ? mediaT.current[slot] : v.currentTime
     const draw = (now: number) => {
       // Start a pending transition once the incoming clip actually has a frame
       // (readyState-driven, not event-driven — 'playing' was unreliable and could
@@ -519,20 +509,16 @@ export default function Stage({
         const e = t * t * (3 - 2 * t)
         mixVal.current = t >= 1 ? mixTarget.current : mixFrom.current + (mixTarget.current - mixFrom.current) * e
       }
-      // Upload a slot's frame: with rVFC, only when a new frame was presented (dirty);
-      // without it, every rAF (legacy behavior). Either way once readyState allows.
-      const uploadTex = (slot: 0 | 1, v: HTMLVideoElement, unit: number, tex: WebGLTexture | null) => {
-        const need = hasRVFC.current ? vfDirty.current[slot] || !texInit.current[slot] : true
-        if (v.readyState >= 2 && need) {
-          gl.activeTexture(gl.TEXTURE0 + unit)
-          gl.bindTexture(gl.TEXTURE_2D, tex)
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v)
-          vfDirty.current[slot] = false
-          texInit.current[slot] = true
-        }
+      if (a.readyState >= 2) {
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, texA)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
       }
-      uploadTex(0, a, 0, texA)
-      uploadTex(1, b, 1, texB)
+      if (b.readyState >= 2) {
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, texB)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
+      }
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
       gl.uniform1f(zoomLoc, cur.current.zoom)
@@ -553,7 +539,7 @@ export default function Stage({
       const edoc = slotMouth.current[eslot]
       let hasMouth = 0
       if (cur.current.mouthMode === 'erase' && edoc && edoc.frames.length && eav.duration > 0) {
-        const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(ftime(eslot, eav) * (edoc.fps || 24))))
+        const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(eav.currentTime * (edoc.fps || 24))))
         const ef = edoc.frames[ei]
         if (ef) {
           const pb = polyBuf.current
@@ -582,7 +568,7 @@ export default function Stage({
       if (onFrameRef.current && av.duration > 0) {
         const fpsNow = cur.current.fps || 24
         const total = Math.max(1, Math.round(av.duration * fpsNow))
-        onFrameRef.current(Math.min(total - 1, Math.floor(ftime(slot, av) * fpsNow)), total)
+        onFrameRef.current(Math.min(total - 1, Math.floor(av.currentTime * fpsNow)), total)
       }
       const doc = slotPose.current[slot]
       const anc = slotAnchor.current[slot]
@@ -654,8 +640,9 @@ export default function Stage({
         // Mouth contour ('contour' mode): the SAM3 polygon as a debug outline.
         const mdoc = slotMouth.current[slot]
         if (cur.current.mouthMode === 'contour' && mdoc && mdoc.frames.length && av.duration > 0) {
-          // Index by the displayed-frame time (rVFC mediaTime), floored — see ftime.
-          const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(ftime(slot, av) * (mdoc.fps || 24))))
+          // floor (not round): the <video> shows frame floor(t*fps) for the whole frame
+          // interval, so round() would lead the contour up to one frame.
+          const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(av.currentTime * (mdoc.fps || 24))))
           const mf = mdoc.frames[mi]
           if (mf) drawMouthContour(octx, mf.poly, project)
         }
@@ -665,9 +652,7 @@ export default function Stage({
         // Frozen: ready once the seek landed (frame decoded) and we've drawn it.
         // Live: ready once playback advances past 0. Either way the frame on screen
         // now is the one a screenshot will capture, so flag the canvas.
-        const ready =
-          (freezeAt != null ? frozenSeeked.current && av.readyState >= 2 : av.readyState >= 2 && av.currentTime > 0) &&
-          texInit.current[active.current] // a real frame is actually in the texture
+        const ready = freezeAt != null ? frozenSeeked.current && av.readyState >= 2 : av.readyState >= 2 && av.currentTime > 0
         if (ready) {
           playingFired.current = true
           cv.dataset.ready = '1'
@@ -681,10 +666,6 @@ export default function Stage({
       cancelAnimationFrame(raf)
       ro.disconnect()
       window.removeEventListener('resize', sizeCanvas)
-      if (hasRVFC.current) {
-        a.cancelVideoFrameCallback?.(vfHandles.current[0])
-        b.cancelVideoFrameCallback?.(vfHandles.current[1])
-      }
     }
   }, [])
 
