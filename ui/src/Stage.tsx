@@ -491,6 +491,24 @@ export default function Stage({
     const b = vRef[1].current!
     a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
     b.muted = true
+    // Lock overlays to the frame the compositor is ACTUALLY showing, not the one we
+    // requested. Setting video.currentTime updates instantly, but the <video> paints
+    // the seeked frame tens of ms later — so an overlay indexed by currentTime leads the
+    // picture by 1–4 frames while scrubbing. requestVideoFrameCallback's mediaTime is the
+    // presented frame's timestamp; index overlays by THAT and the rig can't drift from
+    // the clip. (During playback mediaTime≈currentTime, so this is a no-op there.)
+    const presented: [number, number] = [0, 0]
+    const hasRVFC = 'requestVideoFrameCallback' in a
+    const regVFC = (v: HTMLVideoElement, slot: 0 | 1) => {
+      if (!hasRVFC) return
+      const cb = (_now: number, meta: VideoFrameCallbackMetadata) => {
+        presented[slot] = meta.mediaTime
+        v.requestVideoFrameCallback(cb)
+      }
+      v.requestVideoFrameCallback(cb)
+    }
+    regVFC(a, 0)
+    regVFC(b, 1)
     // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
     // capture after the buffer is composited+cleared, blanking the canvas. Keeping
     // the buffer makes the frozen frame survive any capture path. Off in normal use
@@ -646,13 +664,18 @@ export default function Stage({
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
       gl.uniform1f(sclBLoc, slotScale.current[1])
+      // Display time = the frame actually on screen (rVFC mediaTime), not the requested
+      // one (currentTime). Overlays + erase index by this so they stay locked to the
+      // picture mid-scrub. Falls back to currentTime before the first frame paints / if
+      // rVFC is unsupported.
+      const dispT = (slot: number, v: HTMLVideoElement) => (hasRVFC ? presented[slot] || v.currentTime : v.currentTime)
       // Mouth erase ('erase' mode): upload the active clip's current-frame 16-gon + skin.
       const eslot = active.current
       const eav = eslot === 0 ? a : b
       const edoc = slotMouth.current[eslot]
       let hasMouth = 0
       if (cur.current.mouthMode === 'erase' && edoc && edoc.frames.length && eav.duration > 0) {
-        const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(eav.currentTime * (edoc.fps || 24))))
+        const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(dispT(eslot, eav) * (edoc.fps || 24))))
         const ef = edoc.frames[ei]
         if (ef?.poly) {
           const pb = polyBuf.current
@@ -695,7 +718,7 @@ export default function Stage({
       let fr: PoseFrame | null = null
       if (doc && doc.poses.length && av.duration > 0) {
         const n = doc.poses.length
-        const idx = Math.max(0, Math.min(n - 1, Math.floor(av.currentTime * (doc.fps || 24))))
+        const idx = Math.max(0, Math.min(n - 1, Math.floor(dispT(slot, av) * (doc.fps || 24))))
         const raw = doc.poses[idx]
         if (raw) {
           // Temporal smoothing (dt-based EMA, tau≈90ms): glides com/face, killing
@@ -742,7 +765,7 @@ export default function Stage({
             // x-ray A: the SAM-3D-Body rig (70 kp + bones), frame-indexed like pose.
             const sdoc = slotS3body.current[slot]
             if (sdoc && sdoc.kp.length && av.duration > 0) {
-              const si = Math.max(0, Math.min(sdoc.kp.length - 1, Math.floor(av.currentTime * (sdoc.fps || 24))))
+              const si = Math.max(0, Math.min(sdoc.kp.length - 1, Math.floor(dispT(slot, av) * (sdoc.fps || 24))))
               const skp = sdoc.kp[si]
               if (skp) drawSamOverlay(octx, skp, project)
             }
@@ -756,7 +779,7 @@ export default function Stage({
         if (cur.current.showFace) {
           const fdoc = slotFace.current[slot]
           if (fdoc && fdoc.faces.length && av.duration > 0) {
-            const fi = Math.max(0, Math.min(fdoc.faces.length - 1, Math.floor(av.currentTime * (fdoc.fps || 24))))
+            const fi = Math.max(0, Math.min(fdoc.faces.length - 1, Math.floor(dispT(slot, av) * (fdoc.fps || 24))))
             const ff = fdoc.faces[fi]
             if (ff) drawFaceOverlay(octx, ff.kp, project)
           }
@@ -764,9 +787,9 @@ export default function Stage({
         // Mouth contour ('contour' mode): the SAM3 polygon as a debug outline.
         const mdoc = slotMouth.current[slot]
         if (cur.current.mouthMode === 'contour' && mdoc && mdoc.frames.length && av.duration > 0) {
-          // floor (not round): the <video> shows frame floor(t*fps) for the whole frame
-          // interval, so round() would lead the contour up to one frame.
-          const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(av.currentTime * (mdoc.fps || 24))))
+          // floor (not round) of the PRESENTED time: the <video> shows frame floor(t*fps)
+          // for the whole interval, and dispT is the frame actually on screen.
+          const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(dispT(slot, av) * (mdoc.fps || 24))))
           const mf = mdoc.frames[mi]
           if (mf?.poly) drawMouthContour(octx, mf.poly, project)
         }
