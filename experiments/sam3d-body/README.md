@@ -46,3 +46,27 @@ Per-frame arrays (F = frame count, coords in the **640×640 color-frame pixel sp
 
 `pred_vertices` (18k-vert mesh) is intentionally NOT stored — regenerable from the params,
 and the mesh doesn't fit her anyway.
+
+## 70-keypoint index map (mhr70)
+
+`pred_keypoints_2d` / `_3d` and the s3body.json `kp` are ordered by this index. There is
+**no single "head" joint** — head ≈ `nose(0)` or `neck(69)`; face ≈ mean of 0–4.
+`left`/`right` are the character's own (anatomical) sides.
+
+```
+FACE   0 nose  1 left_eye  2 right_eye  3 left_ear  4 right_ear
+TORSO  5 left_shoulder  6 right_shoulder   9 left_hip  10 right_hip   69 neck
+       67 left_acromion  68 right_acromion
+ARMS   7 left_elbow  8 right_elbow   41 right_wrist  62 left_wrist
+       63 left_olecranon 64 right_olecranon  65 left_cubital_fossa 66 right_cubital_fossa
+LEGS   11 left_knee 12 right_knee   13 left_ankle 14 right_ankle
+FEET   15 left_big_toe 16 left_small_toe 17 left_heel
+       18 right_big_toe 19 right_small_toe 20 right_heel
+R-HAND thumb 21-24 · fore 25-28 · middle 29-32 · ring 33-36 · pinky 37-40 · wrist 41
+L-HAND thumb 42-45 · fore 46-49 · middle 50-53 · ring 54-57 · pinky 58-61 · wrist 62
+       (per finger, tip→base: X4 fingertip · X3 · X2 · X_third_joint = base knuckle)
+```
+
+Skeleton edges + per-edge colors are baked into `ui/src/Stage.tsx` (`SAM_EDGES` /
+`SAM_COLORS`), lifted from the model's `sam_3d_body.metadata.mhr70` so the overlay
+matches the official visualizer.
