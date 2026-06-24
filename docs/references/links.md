@@ -38,4 +38,36 @@ in `inspirations/`, `styles/`, `archived/`.
   > Note: YouTube POT-gates the caption track, so the verbatim transcript can't be
   > pulled headlessly; the above is from the description, chapters, and YouTube's AI
   > summary. Linked follow-ups in the video's resources: "SCAIL-2: Character
-  > Replacement Tutorial" and a WAN2GP/LTX 2.3 install guide.
+  > Replacement Tutorial" (below) and a WAN2GP/LTX 2.3 install guide.
+
+- [SCAIL-2: Character Replacement Tutorial (Free Workflow Included)](https://www.youtube.com/watch?v=RQ_gvpdo9ac)
+  — Prompt Mastery, 9:34. **Hands-on ComfyUI walkthrough of SCAIL-2** — the practical
+  companion to the study. Two free workflows (JSON): **Animation** (drive a reference
+  photo with your motion) and **Replacement** (swap yourself for an anime/cartoon
+  character, keeping the background). This is the concrete "how to run it" — directly
+  feeds the planned gin eval.
+
+  **Exact model set** (all into ComfyUI): SAM 3.1 checkpoint · CLIP Vision · **Wan2.1
+  14B SCAIL-2 fp8** diffusion model · image-to-video LoRA · UMT5 text encoder · Wan2.1
+  VAE. (fp8 → fits 24 GB.)
+
+  **Hard numbers (RTX 3090, 24 GB):**
+  - Resolution via megapixel slider: **0.5 ≈ 480p, 0.8 ≈ 720p**.
+  - Render time: **~300 s for 480p anime, ~800 s for 720p**.
+  - **81-frame cap** per generation (~2.7–3.4 s of clip); extend via the WAN Context
+    Windows workflow.
+  - Masking uses **SAM 3.1** (Monet already runs SAM3 for the mouth track).
+
+  **Implications for Monet** (sharpens the study):
+  - **Anime/cartoon replacement is the advertised, in-distribution use case** — strong
+    de-risk for the chibi, vs. the dead human-skeleton path (`sam-3d-body-not-for-monet`).
+  - **Offline clip factory, confirmed:** ~5–13 min/clip. Feeds the stacked-alpha
+    library; never a live renderer.
+  - **Fidelity tension to test:** native output tops ~720p, but Monet sprites are
+    1024–2043 px source (`docs/016`: never scale a sprite above source). So either
+    accept 720p generation + upscale, or push the megapixel slider and eat longer
+    renders. This is the #1 thing the gin eval must measure.
+  - **81-frame cap fits the clip model** — idle/cozy/talk are short gestures, not long
+    takes; Context Windows only needed for longer loops.
+  - Runs on a single 3090 → gin's newer GPU runs it comfortably; it's a ComfyUI +
+    model-download setup, not raw-repo wrangling.
