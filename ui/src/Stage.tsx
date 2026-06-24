@@ -408,7 +408,7 @@ export default function Stage({
             s.idx = idx
             s.t = now
           }
-          fr = { ...raw, com: smooth.current.com, face: smooth.current.face }
+          fr = { ...raw, com: smooth.current!.com, face: smooth.current!.face }
         }
       }
 
