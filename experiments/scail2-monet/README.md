@@ -115,6 +115,23 @@ python3 upscale_scail2.py --video scail2_monet_e1b_quality_00001.mp4 --target 12
 python3 rife_scail2.py --video scail2_monet_e1b_up_00001.mp4 --mult 2 --in_fps 16   # judder; needs a RIFE ckpt
 ```
 
+## E5 — stacked-alpha integration (done ✅)
+
+Proves the back half: a SCAIL-2 clip → a real transparent Monet sprite. `matte_scail2.py`
+runs BiRefNet (General; clean on the white bg) → alpha video (8 s on gin), then ffmpeg
+`vstack` color-over-alpha → **`out/scail2_monet_e1b_stacked.mp4`, 640×1280** — *byte-for-byte
+the format of a real `contents/monet/*.mp4`* (`docs/008` stacked-alpha). Cutout is clean,
+no halo, white socks/light dress preserved (`out/matte_transparency_check.png`).
+
+So the **whole pipeline is proven end-to-end**: drive → generate → quality regen → upscale
+→ matte → stacked-alpha. The result could drop into `contents/monet/`, run the `docs/017`
+derivative pipeline, and play in `CharacterNode` (`docs/016`) unchanged.
+
+```bash
+python3 matte_scail2.py --video scail2_monet_e1b_quality_00001.mp4 --w 640 --h 640 --prefix scail2_monet_e1b_alpha
+ffmpeg -i color.mp4 -i alpha.mp4 -filter_complex "[0:v]scale=640:640[c];[1:v]format=gray[a];[c][a]vstack" stacked.mp4
+```
+
 ## The experiment menu (what's possible with gin + ComfyUI)
 
 Ranked. E1 done; the rest reuse the same runner / environment.
@@ -128,7 +145,7 @@ Ranked. E1 done; the rest reuse the same runner / environment.
 - **E4 — fidelity & resolution sweep** — 480 vs 720 vs a 32-multiple near 1024. Measure
   crispness against Monet's 1024–2043 px source and the `docs/016` "never below source"
   rule. Quantifies the one real tension from the study.
-- **E5 — stacked-alpha integration** — output → matte (`birefnet-toonout` /
+- **E5 — stacked-alpha integration** ✅ *(done)* — output → matte (`birefnet-toonout` /
   `anime-segmentation` on gin) → `docs/008` stacked-alpha → drop into `CharacterNode`.
   The guaranteed-needed back half.
 - **E6 — motion-library expansion** — batch new idle/cozy/talk clips from a driving set
