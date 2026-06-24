@@ -21,6 +21,16 @@
   "r2_buckets": [
     { "binding": "CONTENTS", "bucket_name": "monet-contents" }
   ],
+  // Per-user memory (docs/015 moat). v0: anon identity (client-minted uuid) keyed
+  // here; Monet remembers each person across visits. Schema in ./migrations.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "monet-memory",
+      "database_id": "f0f0901b-6ca8-46b9-b040-b8331d0d8713",
+      "migrations_dir": "./migrations"
+    }
+  ],
   "observability": {
     "logs": {
       "enabled": true

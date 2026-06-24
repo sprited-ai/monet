@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SpeakerLoudIcon, SpeakerOffIcon } from '@radix-ui/react-icons'
 import { Renderer } from './scene/Renderer'
 import { createRecognizer, resumeAudio, speak, stopSpeak, sttAvailable } from './voice'
+import { getUid } from './uid'
 import type { Framing, Mouth, Pose } from './scene/types'
 
 // The white room — Monet's home (/). A real 3D scene (perspective camera) with
@@ -161,7 +162,7 @@ export default function Whiteroom() {
       try {
         const r = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-monet-uid': getUid() },
           body: JSON.stringify({ messages: history.current }),
         })
         const data = await r.json()

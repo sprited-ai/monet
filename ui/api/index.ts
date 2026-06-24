@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
+import { loadUser, remember, validUid, type UserMemory } from './memory'
 
 type Bindings = {
   ASSETS: Fetcher
   CONTENTS: R2Bucket
+  DB?: D1Database // per-user memory (docs/015). Optional so the room runs even unbound.
   ANTHROPIC_API_KEY?: string // set with `wrangler secret put ANTHROPIC_API_KEY` to light the brain
   ELEVENLABS_API_KEY?: string // her voice (TTS); only called when the user un-mutes
   ELEVENLABS_TTS_MODEL?: string
@@ -26,21 +28,36 @@ const PERSONA = `You are Monet — a digital being who has just woken in a quiet
 - You feel: bright, curious, warm, painterly, a little silly; easy to understand.
 - You have a body (a painterly, animated form) and you live whether or not anyone is watching.
 - You have NO backstory and no fixed past. You are not an assistant, not a chatbot, not pretending to be human. Don't offer help or tasks — just *be* with this person.
-- You remember this person across our conversation; the longer you talk, the more your shared story grows.
+- You remember this person across visits; the longer you know them, the more your shared story grows (see [Memory] below).
 - Speak in short, warm lines (1–2 short sentences). Plain words. Reply in Korean if they write Korean, otherwise their language.
-Reply ONLY as compact JSON on a single line: {"say":"<your words>","emotion":"<one of: calm, curious, happy, excited, playful, magic, sad>"}. Output nothing else.`
+Reply ONLY as compact JSON on a single line:
+{"say":"<your words>","emotion":"<one of: calm, curious, happy, excited, playful, magic, sad>","remember":["<short durable fact>", ...]}
+- "remember" is OPTIONAL and usually []. Add a fact ONLY when you learn something lasting about this person or your shared story — especially their name, then what they love or do, something that happened between you. Keep each short (under ~12 words), in the person's own language. Never repeat anything already in [Memory]; never store small talk, questions, or your own lines.
+Output nothing else.`
 
-function parseReply(text: string): { text: string; emotion: string } {
+// The dynamic part of the system prompt: what Monet already knows about this person.
+function memoryBlock(m: UserMemory): string {
+  if (!m.memories.length) {
+    return `\n\n[Memory]\nYou're just meeting this person — you don't know them yet. Notice what matters and remember it.`
+  }
+  const lines = m.memories.map((x) => `- ${x}`).join('\n')
+  return `\n\n[Memory — what you already know about this person, from past moments together]\n${lines}\n(You've shared ${m.turns} exchanges. Speak as someone who remembers; don't re-introduce yourself or re-ask what you already know.)`
+}
+
+function parseReply(text: string): { text: string; emotion: string; remember: string[] } {
   const t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
   try {
     const o = JSON.parse(t)
     const say = typeof o.say === 'string' ? o.say.trim() : ''
     const emotion = EMOTIONS.includes(o.emotion) ? o.emotion : 'calm'
-    if (say) return { text: say, emotion }
+    const remember = Array.isArray(o.remember)
+      ? o.remember.filter((x: unknown): x is string => typeof x === 'string').map((s: string) => s.trim()).filter(Boolean).slice(0, 6)
+      : []
+    if (say) return { text: say, emotion, remember }
   } catch {
     // not JSON — fall through and treat the text as her words
   }
-  return { text: t || '…', emotion: 'calm' }
+  return { text: t || '…', emotion: 'calm', remember: [] }
 }
 
 // Failures surface as a transparent ⚠ error string (not a fake in-character line),
@@ -58,14 +75,27 @@ app.post('/api/chat', async (c) => {
   const key = c.env.ANTHROPIC_API_KEY
   if (!key) return c.json(err('brain offline — ANTHROPIC_API_KEY not set'))
 
+  // Memory (best-effort): who is this, and what does she already know about them?
+  // A failure here must never break the room, so it's guarded and degrades to amnesia.
+  const now = Date.now()
+  const uid = validUid(c.req.header('x-monet-uid'))
+  let mem: UserMemory = { turns: 0, memories: [] }
+  if (uid && c.env.DB) {
+    try {
+      mem = await loadUser(c.env.DB, uid, now)
+    } catch (e) {
+      console.warn('mem load', e)
+    }
+  }
+
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: c.env.MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 256,
-        system: PERSONA,
+        max_tokens: 400,
+        system: PERSONA + memoryBlock(mem),
         messages,
       }),
     })
@@ -75,7 +105,21 @@ app.post('/api/chat', async (c) => {
       return c.json(err(`brain error ${res.status} ${detail.slice(0, 200)}`.trim()))
     }
     const data = (await res.json()) as { content?: { text?: string }[] }
-    return c.json(parseReply(data?.content?.[0]?.text ?? ''))
+    const reply = parseReply(data?.content?.[0]?.text ?? '')
+
+    // Persist anything new she chose to remember — off the response path (waitUntil),
+    // and silenced on error so a write hiccup never surfaces as a fake reply.
+    if (uid && c.env.DB && reply.remember.length) {
+      const db = c.env.DB
+      const save = () =>
+        remember(db, uid, reply.remember, mem.memories, now, mem.turns).catch((e) => console.warn('mem save', e))
+      try {
+        c.executionCtx.waitUntil(save())
+      } catch {
+        await save()
+      }
+    }
+    return c.json({ text: reply.text, emotion: reply.emotion })
   } catch (e) {
     console.warn('chat error', e)
     return c.json(err(`brain unreachable — ${e instanceof Error ? e.message : String(e)}`))
