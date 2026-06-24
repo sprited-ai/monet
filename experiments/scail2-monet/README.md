@@ -115,6 +115,26 @@ python3 upscale_scail2.py --video scail2_monet_e1b_quality_00001.mp4 --target 12
 python3 rife_scail2.py --video scail2_monet_e1b_up_00001.mp4 --mult 2 --in_fps 16   # judder; needs a RIFE ckpt
 ```
 
+## E2 — cross-structure: real human → Monet (done ✅ — the decisive test)
+
+Driving video: `birefnet-video-input.mp4` (Jin) — a **real woman in a suit, gesturing
+and talking** in a studio (1920×1080, 8 s). Normal adult proportions (~7–8 heads) → the
+3-head chibi. Preprocess: center square-crop → 640×640, 16 fps. Same Monet idle reference.
+
+**Result** (`out/e2_human_vs_monet.png` top=human / bottom=Monet; `out/e2_monet_montage.png`):
+Monet **follows the human's conversational gestures** — arms spread open → hands coming
+together → hands clasped front — identity intact. SCAIL-2 even adapts her into the
+driving video's upper-body framing. **This is the thing the skeleton path could never
+do**: a real human's motion retargeted onto a chibi with no rig, no pose extraction.
+
+- 6-step: `out/scail2_monet_e2_human_00001.mp4` (92 s). Hands a bit soft (tiny chibi
+  hands + fast gesture + speed LoRA).
+- 25-step quality: `scail2_monet_e2_human_q` (cleaner; see file).
+
+**Why it matters:** conversational gesture motion is exactly what whiteroom Monet needs
+for talk clips. E2 + E5 = the full open-ended path: *any* human performance → Monet clip →
+stacked-alpha sprite. The fixed 64-clip library can become an open vocabulary.
+
 ## E5 — stacked-alpha integration (done ✅)
 
 Proves the back half: a SCAIL-2 clip → a real transparent Monet sprite. `matte_scail2.py`
@@ -137,7 +157,7 @@ ffmpeg -i color.mp4 -i alpha.mp4 -filter_complex "[0:v]scale=640:640[c];[1:v]for
 Ranked. E1 done; the rest reuse the same runner / environment.
 
 - **E1 — animation smoke test** ✅ *(done)* — Monet→Monet, prove the pipeline + identity.
-- **E2 — cross-structure retarget** — drive Monet with a **real human** motion video.
+- **E2 — cross-structure retarget** ✅ *(done)* — drive Monet with a **real human** motion video.
   The hard case SCAIL-2 claims and the skeleton path can't do. The decisive product test.
 - **E3 — replacement mode + background** — SAM3 masking: swap a person in a scene for
   Monet, keep the room. Tests the "second entity / user in the white room" future
