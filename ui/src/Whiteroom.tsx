@@ -46,6 +46,28 @@ const REPLY_CLIPS: Record<Emotion, { reaction?: string; talk: string }> = {
 
 const FALLBACK_FRAMING: Framing = { frame: [1184, 1184], origin: [593, 1030], scale: 1 }
 
+// A plain vector mic (Radix has no microphone icon, and Jin doesn't want emoji).
+function MicIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <line x1="12" y1="18" x2="12" y2="21" />
+      <line x1="8.5" y1="21" x2="15.5" y2="21" />
+    </svg>
+  )
+}
+
 export default function Whiteroom() {
   const [caption, setCaption] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'speaking' | 'listening'>('idle')
@@ -421,7 +443,7 @@ export default function Whiteroom() {
         ref={inputRef}
         type="text"
         autoComplete="off"
-        placeholder={sttAvailable ? 'say something — or hold Space to talk' : 'say something…'}
+        placeholder={sttAvailable ? 'say something — or hold the mic to talk' : 'say something…'}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onKeyDown={(e) => {
@@ -454,6 +476,50 @@ export default function Whiteroom() {
           transition: 'opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease',
         }}
       />
+
+      {/* Hold-to-talk: the visible counterpart to hold-Space (which is desktop-only and
+          undiscoverable). Press-and-hold → listen; release → send. Pointer events unify
+          touch + mouse, with capture so release registers even if the finger slides off;
+          touch-action:none stops the hold from scrolling. Hidden where Web Speech is
+          unavailable (e.g. iOS Safari — that path needs server STT later). */}
+      {sttAvailable && (
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.currentTarget.setPointerCapture?.(e.pointerId)
+            startListening()
+          }}
+          onPointerUp={() => stopListening()}
+          onPointerCancel={() => stopListening()}
+          aria-label="hold to talk"
+          title="hold to talk"
+          style={{
+            position: 'fixed',
+            right: 24,
+            bottom: 'calc(5vh + 62px)',
+            width: 54,
+            height: 54,
+            borderRadius: 999,
+            border: `1px solid ${phase === 'listening' ? 'rgba(74,120,220,0.6)' : 'rgba(40,46,58,0.16)'}`,
+            background: phase === 'listening' ? 'rgba(74,120,220,0.18)' : 'rgba(255,255,255,0.6)',
+            color: phase === 'listening' ? '#3a68cc' : 'rgba(120,110,104,0.9)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: phase === 'listening' ? '0 0 16px 2px rgba(74,120,220,0.4)' : 'none',
+            cursor: 'pointer',
+            display: 'grid',
+            placeItems: 'center',
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            padding: 0,
+            transition: 'background .15s ease, border-color .15s ease, box-shadow .15s ease',
+          }}
+        >
+          <MicIcon />
+        </button>
+      )}
 
       {/* Live indicator: amber while thinking, warm while speaking, invisible at rest. */}
       <div
