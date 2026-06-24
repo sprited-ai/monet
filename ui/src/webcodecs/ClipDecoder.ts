@@ -32,7 +32,7 @@ function getDescription(file: any, track: any): Uint8Array {
 
 async function demux(
   url: string,
-): Promise<{ config: VideoDecoderConfig; chunks: EncodedVideoChunk[]; w: number; h: number }> {
+): Promise<{ config: VideoDecoderConfig; chunks: EncodedVideoChunk[]; w: number; h: number; baseTs: number }> {
   const file = MP4Box.createFile()
   const chunks: EncodedVideoChunk[] = []
   let config: VideoDecoderConfig | null = null
@@ -68,7 +68,12 @@ async function demux(
   file.appendBuffer(buf)
   file.flush()
   await done
-  return { config: config!, chunks, w, h }
+  // Frame 0's presentation timestamp is often NOT 0 — H.264 with B-frames carries an initial
+  // cts offset (= reorder depth) so dts stays ≥ 0. Subtract it so index 0 = the first picture,
+  // matching the mouth.json's 0-based numbering. (Indexing by absolute timestamp shifted every
+  // frame by that offset → the erase rode N frames ahead of the body.)
+  const baseTs = chunks.length ? Math.min(...chunks.map((c) => c.timestamp)) : 0
+  return { config: config!, chunks, w, h, baseTs }
 }
 
 // A streaming, frame-exact clip. `frameAt(i)` (called once per rAF) drives decoding toward
@@ -85,6 +90,7 @@ export class StreamingClip {
   private config!: VideoDecoderConfig
   private decoder: VideoDecoder | null = null
   private cache = new Map<number, VideoFrame>()
+  private baseTs = 0 // first frame's presentation timestamp (µs) — subtracted so index 0 = first picture
   private feedNext = 0 // next chunk index to feed
   private want = 0 // current target index (from the consumer)
   private closed = false
@@ -104,11 +110,12 @@ export class StreamingClip {
 
   static async create(url: string, fps = 24): Promise<StreamingClip> {
     const clip = new StreamingClip(fps)
-    const { config, chunks, w, h } = await demux(url)
+    const { config, chunks, w, h, baseTs } = await demux(url)
     clip.config = config
     clip.chunks = chunks
     clip.width = w
     clip.height = h
+    clip.baseTs = baseTs
     clip.total = chunks.length
     clip.startDecoder()
     return clip
@@ -133,7 +140,7 @@ export class StreamingClip {
         // DECODE order (Safari does — Chrome happened to reorder to presentation), so
         // output-order indexing jumbled playback (the "1 3 2 4 3 5" tic). timestamp is the
         // chunk cts we set, in µs → round to the frame index.
-        const i = Math.round((frame.timestamp / 1e6) * this.fps)
+        const i = Math.round(((frame.timestamp - this.baseTs) / 1e6) * this.fps)
         this.cache.get(i)?.close() // replace if we somehow re-decoded this index
         this.cache.set(i, frame)
         // evict frames that fell well behind the play head
