@@ -56,7 +56,7 @@ export default function Preview() {
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
   const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('sam') // x-ray: A=SAM, B=bizarre (on by default; face rig is its own toggle)
-  const [faceRig, setFaceRig] = useState(true) // anime-face-detector 28-kp rig — its own overlay, ON by default
+  const [faceRig, setFaceRig] = useState(false) // anime-face-detector 28-kp rig — its own overlay, OFF by default
   const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
   const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data (bizarre)
   const [s3body, setS3body] = useState<SamDoc | null>(null) // current clip's SAM-3D-Body rig
