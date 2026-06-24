@@ -214,7 +214,8 @@ function drawSamOverlay(
   project: (ux: number, uy: number) => [number, number],
   labels = true,
 ) {
-  ctx.lineWidth = 2
+  ctx.lineWidth = 3.5
+  ctx.lineCap = 'round'
   for (let e = 0; e < SAM_EDGES.length; e++) {
     const [a, b] = SAM_EDGES[e]
     const pa = kp[a], pb = kp[b]
@@ -226,14 +227,17 @@ function drawSamOverlay(
   ctx.fillStyle = 'rgba(255,255,255,0.9)'
   for (const p of kp) {
     const P = project(p[0], p[1])
-    ctx.beginPath(); ctx.arc(P[0], P[1], 1.8, 0, 7); ctx.fill()
+    ctx.beginPath(); ctx.arc(P[0], P[1], 2.6, 0, 7); ctx.fill()
   }
   if (labels) {
-    ctx.font = '8px ui-monospace, monospace'
+    ctx.font = '11px ui-monospace, monospace'
     ctx.textBaseline = 'middle'
-    ctx.lineWidth = 2.5
+    ctx.lineWidth = 3
     ctx.lineJoin = 'round'
     for (let i = 0; i < kp.length; i++) {
+      // Skip the finger-joint labels (21–40 right, 42–61 left) — too dense; the
+      // dots/bones still show the hands. Wrists (41/62) keep their label.
+      if ((i >= 21 && i <= 40) || (i >= 42 && i <= 61)) continue
       const P = project(kp[i][0], kp[i][1])
       const t = SAM_LABELS[i] ?? String(i)
       ctx.strokeStyle = 'rgba(0,0,0,0.7)' // halo so the text reads on any background
