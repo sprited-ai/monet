@@ -7,7 +7,7 @@ How to (re)generate the per-frame data that rides alongside each Monet clip. Eve
 | derivative | from | drives | where it runs |
 |---|---|---|---|
 | `<clip>.pose.json` | **bizarre-pose-estimator** (2D) | contact-shadow x (`com`), camera zoom (`face`), x-ray **B** | local CPU |
-| `<clip>.face.json` | **anime-face-detector** (28-kp) | x-ray **C** (face landmarks); future gaze/blink/expression | local CPU |
+| `<clip>.face.json` | **anime-face-detector** (28-kp) | **face-rig** overlay (own toggle, on by default); future gaze/blink/expression | local CPU |
 | `<clip>.s3body.json` | **SAM-3D-Body** (3D rig) | x-ray **A** (70-kp rig + hands); future chibi retarget | **gin** GPU → local |
 | `<clip>.mouth.json` | SAM3 mouth track | shader mouth-erase / contour | separate track (not covered here) |
 
@@ -89,6 +89,9 @@ cd experiments/anime-face-detector
 
 - Per frame we keep the single highest-score face (Monet is one character), or `null`
   if nothing scored above threshold. Schema: `{ bbox:[x,y,w,h], score, kp:[[x,y,conf]*28] }`.
+- In `/preview`, the face rig is its **own** overlay (a dedicated `face` toggle, **on by
+  default**) — separate from the x-ray cycle, and coexists with it (`drawFaceOverlay` in
+  Stage.tsx, gated by the `showFace` prop).
 - 28-point index map (contour / eyebrows / eyes / nose / mouth) is in the `face_data.py`
   header + `keypoint_groups` in every JSON — derived empirically on the sprite, since
   upstream doesn't publish it.

@@ -55,7 +55,8 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
-  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre' | 'face'>('sam') // x-ray: A=SAM, B=bizarre, C=face
+  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('off') // x-ray: A=SAM, B=bizarre (off by default; face rig is its own toggle)
+  const [faceRig, setFaceRig] = useState(true) // anime-face-detector 28-kp rig — its own overlay, ON by default
   const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
   const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data (bizarre)
   const [s3body, setS3body] = useState<SamDoc | null>(null) // current clip's SAM-3D-Body rig
@@ -312,7 +313,8 @@ export default function Preview() {
             scrub={scrub}
             onFrame={onFrame}
             showOverlay={overlay !== 'off'}
-            overlaySource={overlay === 'sam' ? 'sam' : overlay === 'face' ? 'face' : 'bizarre'}
+            overlaySource={overlay === 'sam' ? 'sam' : 'bizarre'}
+            showFace={faceRig}
             showShadow={shadow}
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
@@ -366,20 +368,21 @@ export default function Preview() {
             {shadow ? '◉' : '○'} shadow
           </button>
           <button
-            onClick={() => setOverlay((v) => (v === 'sam' ? 'bizarre' : v === 'bizarre' ? 'face' : v === 'face' ? 'off' : 'sam'))}
-            title="x-ray: A (SAM rig) → B (bizarre) → C (face) → off"
+            onClick={() => setFaceRig((v) => !v)}
+            title="toggle the face rig (anime-face-detector 28-kp landmarks)"
+            style={pill(faceRig)}
+          >
+            {faceRig ? '◉' : '○'} face
+            {faceRig && !face && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+          </button>
+          <button
+            onClick={() => setOverlay((v) => (v === 'sam' ? 'bizarre' : v === 'bizarre' ? 'off' : 'sam'))}
+            title="x-ray: A (SAM rig) → B (bizarre) → off"
             style={pill(overlay !== 'off')}
           >
-            {overlay === 'off'
-              ? '○ x-ray'
-              : overlay === 'sam'
-                ? '◉ x-ray A · SAM'
-                : overlay === 'bizarre'
-                  ? '◉ x-ray B · bizarre'
-                  : '◉ x-ray C · face'}
+            {overlay === 'off' ? '○ x-ray' : overlay === 'sam' ? '◉ x-ray A · SAM' : '◉ x-ray B · bizarre'}
             {overlay === 'sam' && !s3body && current && <span style={{ opacity: 0.8 }}>· no data</span>}
             {overlay === 'bizarre' && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
-            {overlay === 'face' && !face && current && <span style={{ opacity: 0.8 }}>· no data</span>}
           </button>
           <button
             onClick={() => setMouthMode((m) => (m === 'contour' ? 'erase' : m === 'erase' ? 'off' : 'contour'))}

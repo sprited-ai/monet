@@ -398,7 +398,8 @@ type Props = {
   mouth?: Mouth | null // this clip's SAM3 mouth track (contents/<clip>.mouth.json)
   mouthMode?: MouthMode // 'contour' = polygon overlay, 'erase' = shader flat-fill, 'off' = neither
   showOverlay?: boolean // draw the x-ray overlay
-  overlaySource?: 'bizarre' | 'sam' | 'face' // x-ray B = bizarre, A = SAM rig, C = face landmarks
+  overlaySource?: 'bizarre' | 'sam' // x-ray B = bizarre (com/face/kp), x-ray A = SAM rig
+  showFace?: boolean // draw the anime-face-detector 28-kp rig (its own overlay, on by default)
   showShadow?: boolean // draw a soft contact shadow under her feet (tracks com x)
   fps?: number // clip fps, for the frame scrubber (default 24)
   scrub?: number | null // pin to this frame (pauses); null = autoplay
@@ -428,6 +429,7 @@ export default function Stage({
   mouthMode = 'off',
   showOverlay = false,
   overlaySource = 'bizarre',
+  showFace = false,
   showShadow = false,
   fps = 24,
   scrub = null,
@@ -471,8 +473,8 @@ export default function Stage({
   const lastLoaded = useRef(0) // slot the most recent clip loaded into (pose fetch lands here)
   // Temporal smoothing state for the com/face markers (dt-based EMA in the draw loop).
   const smooth = useRef<{ com: [number, number]; face: [number, number]; idx: number; slot: number; t: number } | null>(null)
-  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay, overlaySource, showShadow, mouthMode, fps }) // latest props for the loop
-  cur.current = { scale, anchor, baseline, zoom, showOverlay, overlaySource, showShadow, mouthMode, fps }
+  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay, overlaySource, showFace, showShadow, mouthMode, fps }) // latest props for the loop
+  cur.current = { scale, anchor, baseline, zoom, showOverlay, overlaySource, showFace, showShadow, mouthMode, fps }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
