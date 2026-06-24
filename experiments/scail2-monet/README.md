@@ -83,7 +83,7 @@ So the fix is layered (a single per-frame upscaler is *not* the whole answer):
 | spatial | `RealESRGAN_x4plus_anime_6B` (on gin) | ✅ done | low-res line/edge softness |
 | temporal | RIFE/FILM VFI (nodes on gin) | ⚠ ckpt not downloaded (GitHub blocked; pull from HF) | judder on fast motion |
 | restore | **SeedVR2** (not installed) | proposed | true temporal deblur+upscale, the dedicated "fix the blur" model |
-| root cause | regen w/o 6-step distill LoRA | ⏳ E1b running | distill LoRAs smear fast motion — may remove blur at the source |
+| root cause | regen w/o 6-step distill LoRA | ✅ **confirmed the main cause** | distill LoRA smeared fast motion; 25-step is visibly sharper |
 
 **E1a — anime upscale (done).** `upscale_scail2.py`: RealESRGAN anime 4× → lanczos to
 1280, 32 s on gin. `out/scail2_monet_e1_up_00001.mp4`. Compare on a run frame:
@@ -92,9 +92,27 @@ hair/eyes/floral. This frame was low-res, not motion-blurred, so it cleaned up w
 **Honest caveat:** where a frame is genuinely motion-smeared, ESRGAN upscales the smear;
 it can't reconstruct it. That's what SeedVR2 / the root-cause regen are for.
 
+**E1b — root-cause regen (the real finding).** Same inputs/seed, **no speed LoRA, 25
+steps, cfg 5.0**. 745 s vs 88 s (~8.5×). `out/scail2_monet_e1b_quality_00001.mp4`.
+Zoomed leg/shoe compare `out/compare_legs_6vs25.png` (left 6-step, right 25-step): the
+25-step is **clearly cleaner** — crisp shoe outline + stripe, distinct floral pattern,
+sharp leg contour. **So the run-blur was mostly the 6-step distill LoRA, not the
+resolution.** Quality ceiling is much higher than E1 suggested.
+
+**Best result so far = E1b + anime upscale:** `out/scail2_monet_e1b_up_00001.mp4`
+(`out/final_25step_upscaled_montage.png`). Sharp source × 1280 anime upscale.
+
+Recipe / cost trade:
+- **Hero clips:** 25-step no-LoRA (~12 min/clip) → ESRGAN 1280. Sharpest.
+- **Fast/batch:** 6-step distill LoRA (~90 s/clip) → ESRGAN. Softer on fast motion.
+- Open: a middle speed LoRA or fewer-but-not-6 steps; RIFE for judder (ckpt blocked on
+  GitHub, pull from HF); SeedVR2 for true temporal restore.
+
 ```bash
-python3 upscale_scail2.py --video scail2_monet_e1_00001.mp4 --target 1280 --prefix scail2_monet_e1_up
-python3 rife_scail2.py    --video scail2_monet_e1_up_00001.mp4 --mult 2 --in_fps 16   # needs a RIFE ckpt
+python3 run_scail2.py --ref monet_ref_idle1.png --drive seedance-sample.mp4 \
+    --steps 25 --cfg 5.0 --lora_strength 0.0 --prefix scail2_monet_e1b_quality   # sharp source
+python3 upscale_scail2.py --video scail2_monet_e1b_quality_00001.mp4 --target 1280 --prefix scail2_monet_e1b_up
+python3 rife_scail2.py --video scail2_monet_e1b_up_00001.mp4 --mult 2 --in_fps 16   # judder; needs a RIFE ckpt
 ```
 
 ## The experiment menu (what's possible with gin + ComfyUI)
