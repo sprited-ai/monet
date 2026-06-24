@@ -204,21 +204,37 @@ app.post('/api/tts', async (c) => {
   const key = c.env.ELEVENLABS_API_KEY
   if (!key) return c.json({ error: 'no ELEVENLABS_API_KEY' }, 503)
   const voiceId = isKorean(text) ? VOICE_KO : isJapanese(text) ? VOICE_JA : VOICE_EN
-  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'xi-api-key': key, accept: 'audio/mpeg' },
-    body: JSON.stringify({
-      text,
-      model_id: c.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
-      output_format: 'mp3_44100_128',
-      voice_settings: { stability: 0.32, similarity_boost: 0.7, style: 0.55, use_speaker_boost: true },
-    }),
-  })
-  if (!r.ok) {
-    console.warn('eleven-tts', r.status, await r.text().catch(() => ''))
-    return c.json({ error: `tts ${r.status}` }, 502)
+  // The outbound fetch must be guarded: a network-layer failure (ElevenLabs
+  // unreachable, offline) rejects, and an uncaught reject crashes the request —
+  // in dev it pops a Vite "fetch failed" overlay. Return a clean 502 instead; the
+  // client (voice.ts) already treats a non-ok TTS as "no audio" and stays silent.
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'xi-api-key': key, accept: 'audio/mpeg' },
+      body: JSON.stringify({
+        text,
+        model_id: c.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
+        output_format: 'mp3_44100_128',
+        voice_settings: { stability: 0.32, similarity_boost: 0.7, style: 0.55, use_speaker_boost: true },
+      }),
+    })
+    if (!r.ok) {
+      console.warn('eleven-tts', r.status, await r.text().catch(() => ''))
+      return c.json({ error: `tts ${r.status}` }, 502)
+    }
+    return new Response(r.body, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'no-store' } })
+  } catch (e) {
+    console.warn('eleven-tts unreachable', e)
+    return c.json({ error: 'tts unreachable' }, 502)
   }
-  return new Response(r.body, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'no-store' } })
+})
+
+// Safety net: any uncaught error in a handler returns a clean JSON 500 instead of
+// crashing the request (which, in dev, surfaces as a Vite "fetch failed" overlay).
+app.onError((e, c) => {
+  console.warn('unhandled', c.req.path, e)
+  return c.json({ error: 'server error' }, 500)
 })
 
 export default app
