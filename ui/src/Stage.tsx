@@ -640,6 +640,13 @@ export default function Stage({
         const e = t * t * (3 - 2 * t)
         mixVal.current = t >= 1 ? mixTarget.current : mixFrom.current + (mixTarget.current - mixFrom.current) * e
       }
+      // While scrubbing, keep the active video frozen so texImage2D uploads the PINNED
+      // frame — the scrub effect's pause() can be raced by a mid-drag seek that leaves the
+      // element briefly playing. Frozen texture + mediaTime-indexed overlay = exact lock.
+      if (scrubRef.current != null) {
+        const sv = active.current === 0 ? a : b
+        if (!sv.paused) sv.pause()
+      }
       if (a.readyState >= 2) {
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, texA)
@@ -665,14 +672,17 @@ export default function Stage({
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
       gl.uniform1f(sclBLoc, slotScale.current[1])
       // Display time = the frame the overlays + erase should index, chosen to match what
-      // the GL texture (texImage2D from the <video>) is showing. PLAYING: texImage2D
-      // tracks the freshest frame ≈ currentTime (rVFC's mediaTime lags it by ~1 frame a
-      // third of the time), so currentTime matches best. PAUSED/SCRUBBING: the picture is
-      // the last PRESENTED frame (the landed seek), which currentTime can lead by tens of
-      // ms — so use rVFC mediaTime to stay locked to it. Best of both: no lead in scrub,
-      // no trail in playback. Falls back to currentTime if rVFC is unsupported.
+      // the GL texture (texImage2D from the <video>) is showing. SCRUBBING (pinned): the
+      // picture is the last PRESENTED frame (the landed seek), which currentTime can lead
+      // by tens of ms — index by rVFC mediaTime to stay locked. AUTOPLAY: texImage2D
+      // tracks the freshest frame ≈ currentTime (mediaTime lags it ~1 frame a third of
+      // the time), so currentTime matches best. The ground truth for "scrubbing" is
+      // scrubRef, NOT v.paused — a mid-drag seek can leave the video briefly playing,
+      // which (under v.paused) let the overlay fall back to currentTime and LEAD the
+      // picture by a frame. Falls back to currentTime if rVFC is unsupported.
+      const scrubbing = scrubRef.current != null
       const dispT = (slot: number, v: HTMLVideoElement) =>
-        hasRVFC && v.paused ? presented[slot] || v.currentTime : v.currentTime
+        hasRVFC && scrubbing ? presented[slot] || v.currentTime : v.currentTime
       // Mouth erase ('erase' mode): upload the active clip's current-frame 16-gon + skin.
       const eslot = active.current
       const eav = eslot === 0 ? a : b
