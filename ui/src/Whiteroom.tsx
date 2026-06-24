@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SpeakerLoudIcon, SpeakerOffIcon } from '@radix-ui/react-icons'
 import { Renderer } from './scene/Renderer'
 import { resumeAudio, speak, stopSpeak } from './voice'
-import type { Framing } from './scene/types'
+import type { Framing, Pose } from './scene/types'
 
 // The white room — Monet's home (/). A real 3D scene (perspective camera) with
 // Monet as a Ragnarok-style billboarded stacked-alpha sprite, in an empty gradient
@@ -65,6 +65,7 @@ export default function Whiteroom() {
   const renderer = useRef<Renderer | null>(null)
   const framings = useRef<Record<string, Framing>>({})
   const indexed = useRef<Record<string, Indexed>>({})
+  const poseCache = useRef<Record<string, Promise<Pose | null>>>({}) // per-clip pose JSON, fetched once
   const script = useRef<string[]>([]) // queued clips (a reply's reaction + talk reps)
   const speaking = useRef(false)
   const lastIdle = useRef(-1)
@@ -80,9 +81,20 @@ export default function Whiteroom() {
     return framings.current[key] ?? framings.current['regular'] ?? FALLBACK_FRAMING
   }, [])
 
+  // Each clip's pose JSON, fetched once and cached (clips loop, so this pays off fast).
+  // Missing data → null, and the shadow simply recenters under the feet.
+  const poseFor = useCallback((name: string): Promise<Pose | null> => {
+    if (!poseCache.current[name]) {
+      poseCache.current[name] = fetch(`/contents/monet/${name}.pose.json`)
+        .then((r) => (r.ok ? (r.json() as Promise<Pose>) : null))
+        .catch(() => null)
+    }
+    return poseCache.current[name]
+  }, [])
+
   const play = useCallback(
-    (name: string) => renderer.current?.character.setClip(clipSrc(name), framingFor(name)),
-    [framingFor],
+    (name: string) => renderer.current?.character.setClip(clipSrc(name), framingFor(name), poseFor(name)),
+    [framingFor, poseFor],
   )
 
   const pickAutonomous = useCallback(() => {
@@ -171,6 +183,7 @@ export default function Whiteroom() {
     if (!canvasRef.current || !videoBoxRef.current) return
     const r = new Renderer(canvasRef.current, videoBoxRef.current)
     renderer.current = r
+    if (import.meta.env.DEV) (window as unknown as { renderer: Renderer }).renderer = r // dev debug hook
     r.character.onClipEnd = advance
     r.start()
     let cancelled = false

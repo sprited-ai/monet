@@ -34,3 +34,11 @@ export type Framing = {
   origin?: [number, number]
   scale?: number
 }
+
+// A clip's per-frame pose data (from contents/monet/<clip>.pose.json). Coords are
+// normalized 0..1 to the color frame. Only the bits the scene needs are typed here;
+// com drives the contact-shadow x, face is the future camera zoom target.
+export type Pose = {
+  fps: number
+  poses: ({ com: [number, number]; face: [number, number] } | null)[]
+}

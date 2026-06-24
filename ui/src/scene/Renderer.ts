@@ -20,6 +20,7 @@ export class Renderer {
 
   zoom = 1 // current dolly zoom (1 = the framing above); eased toward zoomTarget
   private zoomTarget = 1
+  private shadowOffset = 0 // eased world-x offset of the shadow under Monet's CoM (pose-driven)
   private nodes: SceneNode[]
   private raf = 0
   private last = 0
@@ -104,6 +105,14 @@ export class Renderer {
         toggles: this.toggles,
       }
       for (const n of this.nodes) n.update(frame)
+      // The contact shadow follows Monet's center of mass when the clip has pose data
+      // (else recenters under the feet). Eased here — temporal smoothing in the loop —
+      // so the blob glides instead of snapping per pose frame. Offset is along the
+      // billboard right vector (≈ world x for a front-on camera).
+      const off = this.character.groundOffset() ?? 0
+      this.shadowOffset += (off - this.shadowOffset) * (1 - Math.exp(-dt / 90))
+      this.shadow.pos[0] = this.character.pos[0] + this.right[0] * this.shadowOffset
+      this.shadow.pos[2] = this.character.pos[2] + this.right[2] * this.shadowOffset
       for (const n of this.nodes) n.draw(frame)
       this.raf = requestAnimationFrame(loop)
     }

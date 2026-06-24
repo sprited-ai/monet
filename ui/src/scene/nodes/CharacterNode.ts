@@ -1,7 +1,7 @@
 import { createProgram, createQuad, createVideoTexture, uniforms } from '../gl-utils'
 import spriteVert from '../shaders/sprite.vert?raw'
 import spriteFrag from '../shaders/sprite.frag?raw'
-import type { Frame, Framing, SceneNode } from '../types'
+import type { Frame, Framing, Pose, SceneNode } from '../types'
 
 // Monet's body: a billboarded stacked-alpha sprite (docs/008 + docs/016). Two
 // <video> slots cross-dissolve in a single premultiplied draw — ported from the
@@ -21,6 +21,7 @@ type Slot = {
   anc: [number, number] // feet anchor: x from left, y from top (normalized)
   scl: number // framing scale
   fas: number // frame aspect (frameW / frameH) — fallback if video dims unknown
+  pose: Pose | null // this clip's per-frame pose (drives the contact shadow); may arrive late
 }
 
 export class CharacterNode implements SceneNode {
@@ -38,6 +39,7 @@ export class CharacterNode implements SceneNode {
   private pending = -1
   private endedFired = false
   private first = true
+  private poseToken = [0, 0] // per-slot guard so a late pose fetch can't overwrite a newer clip
   pos: [number, number, number] = [0, 0, 0]
   onClipEnd: (() => void) | null = null
 
@@ -72,6 +74,7 @@ export class CharacterNode implements SceneNode {
       anc: [0.5, 0.87] as [number, number],
       scl: 1,
       fas: 1,
+      pose: null as Pose | null,
     }))
   }
 
@@ -88,28 +91,47 @@ export class CharacterNode implements SceneNode {
     return v.videoWidth && v.videoHeight ? v.videoWidth / (v.videoHeight / 2) : s.fas
   }
 
-  setClip(src: string, framing: Framing) {
+  // pose may be a Promise (the JSON fetch races the video load) — it's assigned to
+  // the slot when it resolves, guarded so a later clip reusing the slot wins.
+  setClip(src: string, framing: Framing, pose?: Promise<Pose | null> | Pose | null) {
     const p = this.params(framing)
+    const slot = this.first ? 0 : 1 - this.active
+    const s = this.slots[slot]
+    Object.assign(s, p)
+    s.pose = null
+    const tok = ++this.poseToken[slot]
+    Promise.resolve(pose ?? null).then((pd) => {
+      if (this.poseToken[slot] === tok) s.pose = pd
+    })
+    s.video.src = src
+    s.video.load() // Safari won't refetch a reused (ended) element on a bare src swap
+    s.video.play().catch(() => {})
     if (this.first) {
       this.first = false
-      const s = this.slots[0]
-      Object.assign(s, p)
-      s.video.src = src
-      s.video.load()
-      s.video.play().catch(() => {})
       this.active = 0
       this.mix = 0
       this.mixTarget = 0
       this.endedFired = false
       return
     }
-    const incoming = 1 - this.active
-    const s = this.slots[incoming]
-    Object.assign(s, p)
-    s.video.src = src
-    s.video.load() // Safari won't refetch a reused (ended) element on a bare src swap
-    s.video.play().catch(() => {})
-    this.pending = incoming // the update loop blends to it once it's decoding
+    this.pending = slot // the update loop blends to it once it's decoding
+  }
+
+  // World-x offset (along the billboard right vector) of the active clip's center of
+  // mass for the current frame — i.e. where the contact shadow should sit relative to
+  // the feet. null when this clip has no pose data. Derived by inverting the sprite
+  // shader: u.x = anc.x + (v_uv.x-0.5)*quadAspect/(scl*fas), and world = (v_uv.x-0.5)*quad.x.
+  groundOffset(): number | null {
+    const s = this.slots[this.active]
+    const pose = s.pose
+    if (!pose || !pose.poses.length) return null
+    const v = s.video
+    if (!(v.duration > 0)) return null
+    const n = pose.poses.length
+    const idx = Math.max(0, Math.min(n - 1, Math.round(v.currentTime * (pose.fps || 24))))
+    const fr = pose.poses[idx]
+    if (!fr) return null
+    return (fr.com[0] - s.anc[0]) * s.scl * this.fas(s) * QUAD[1]
   }
 
   update({ now }: Frame) {
