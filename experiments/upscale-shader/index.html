@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;background:#15171c;color:#cdd3dc;font:13px/1.4 -apple-system,Helvetica,Arial}
+  #wrap{padding:16px}
+  h1{font-size:15px;font-weight:600;margin:0 0 4px}
+  .sub{color:#7a828e;margin:0 0 14px;font-size:12px}
+  canvas{display:block;border-radius:6px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Fragment-shader upscaling — Monet sprite, 192px source → 4× (768px tiles)</h1>
+  <p class="sub" id="sub">loading…</p>
+  <canvas id="c"></canvas>
+</div>
+<script>
+const LOW = 192;       // low-res source edge (the "render target")
+const TILE = 384;      // displayed tile edge (2x of low shown at 2x dpr -> crisp 4x feel)
+const PAD = 10, LABEL = 26;
+const COLS = 3, ROWS = 2;
+
+const TILES = [
+  {mode:99, name:'SOURCE (1536px reference)'},
+  {mode:1,  name:'Nearest (the 192px input)'},
+  {mode:2,  name:'Bilinear (hardware GL_LINEAR)'},
+  {mode:3,  name:'Bicubic — Catmull-Rom 4×4'},
+  {mode:4,  name:'Lanczos-3 (sinc, 6×6)'},
+  {mode:5,  name:'Anime4K v1 line-refine (ML-mimic)'},
+];
+
+const VERT = `#version 300 es
+in vec2 p; out vec2 v;
+void main(){ v = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }`;
+
+const FRAG = `#version 300 es
+precision highp float;
+in vec2 v; out vec4 o;
+uniform sampler2D uLow;   // nearest-filtered, LOW x LOW
+uniform sampler2D uFull;  // linear-filtered, full res
+uniform float uSize;      // LOW
+uniform int uMode;
+uniform int uFlipFull;
+uniform vec4 uCrop;       // ox,oy,sx,sy  (remap v into a sub-region)
+
+// premultiplied-alpha point sample: RGB*=A so transparent texels (RGB garbage)
+// can't bleed color into the edge. All filters run on vec4 in this space.
+vec4 tx(vec2 texel){ vec4 c = texture(uLow, (texel+0.5)/uSize); c.rgb *= c.a; return c; }
+
+vec4 bilinear(vec2 uv){
+  vec2 p = uv*uSize - 0.5; vec2 f = fract(p); vec2 b = floor(p);
+  vec4 c00=tx(b), c10=tx(b+vec2(1,0)), c01=tx(b+vec2(0,1)), c11=tx(b+vec2(1,1));
+  return mix(mix(c00,c10,f.x), mix(c01,c11,f.x), f.y);
+}
+float w_cat(float x){ // Catmull-Rom
+  x=abs(x);
+  if(x<1.0) return 1.5*x*x*x - 2.5*x*x + 1.0;
+  if(x<2.0) return -0.5*x*x*x + 2.5*x*x - 4.0*x + 2.0;
+  return 0.0;
+}
+vec4 bicubic(vec2 uv){
+  vec2 p = uv*uSize - 0.5; vec2 f = fract(p); vec2 b = floor(p);
+  vec4 sum = vec4(0.0); float wsum=0.0;
+  for(int j=-1;j<=2;j++) for(int i=-1;i<=2;i++){
+    float w = w_cat(float(i)-f.x)*w_cat(float(j)-f.y);
+    sum += tx(b+vec2(i,j))*w; wsum+=w;
+  }
+  return sum/wsum;
+}
+float sinc(float x){ if(abs(x)<1e-4) return 1.0; x*=3.14159265; return sin(x)/x; }
+float w_lan(float x){ if(abs(x)>=3.0) return 0.0; return sinc(x)*sinc(x/3.0); }
+vec4 lanczos(vec2 uv){
+  vec2 p = uv*uSize - 0.5; vec2 f = fract(p); vec2 b = floor(p);
+  vec4 sum=vec4(0.0); float wsum=0.0;
+  for(int j=-2;j<=3;j++) for(int i=-2;i<=3;i++){
+    float w = w_lan(float(i)-f.x)*w_lan(float(j)-f.y);
+    sum += tx(b+vec2(i,j))*w; wsum+=w;
+  }
+  return sum/wsum;
+}
+float luma(vec4 c){ return dot(c.rgb, vec3(0.299,0.587,0.114)); } // premult luma → edge direction
+// Anime4K v1-style: bicubic base, then push pixels along the luminance
+// gradient toward the nearest edge -> thins & sharpens lines (the trained-CNN mimic).
+vec4 anime4k(vec2 uv){
+  vec4 base = bicubic(uv);
+  vec2 t = vec2(1.0/uSize);
+  float l  = luma(base);
+  float lx = luma(bicubic(uv+vec2(t.x,0))) - luma(bicubic(uv-vec2(t.x,0)));
+  float ly = luma(bicubic(uv+vec2(0,t.y))) - luma(bicubic(uv-vec2(0,t.y)));
+  vec2 g = vec2(lx,ly);
+  float gl = length(g);
+  if(gl < 1e-3) return base;
+  vec2 dir = normalize(g);
+  float strength = 0.45;
+  vec4 fwd  = bicubic(uv + dir*t*strength);  // sample toward brighter side
+  vec4 back = bicubic(uv - dir*t*strength);  // toward darker side
+  // pull toward whichever side darkens the line edge -> crisper contours
+  return mix(base, (l < luma(fwd)) ? back : fwd, clamp(gl*2.5,0.0,0.7));
+}
+
+void main(){
+  vec2 uv = uCrop.xy + v*uCrop.zw;     // remap into crop sub-region
+  vec4 c;                              // premultiplied RGBA
+  if(uMode==99){ vec2 fv=uv; if(uFlipFull==1) fv.y=1.0-fv.y; c=texture(uFull,fv); c.rgb*=c.a; }
+  else if(uMode==1) c = tx(floor(uv*uSize));
+  else if(uMode==2) c = bilinear(uv);
+  else if(uMode==3) c = bicubic(uv);
+  else if(uMode==4) c = lanczos(uv);
+  else c = anime4k(uv);
+  c.a = clamp(c.a, 0.0, 1.0); c.rgb = clamp(c.rgb, 0.0, 1.0);
+  // composite premultiplied result over a checkerboard so upscaled alpha is visible
+  float ch = mod(floor(v.x*16.0)+floor(v.y*16.0), 2.0);
+  vec3 bg = mix(vec3(0.20,0.22,0.25), vec3(0.30,0.32,0.36), ch);
+  o = vec4(bg*(1.0-c.a) + c.rgb, 1.0);   // c.rgb already premultiplied
+}`;
+
+function sh(gl,t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o;}
+
+async function main(){
+  const img = new Image();
+  img.src = 'src.png';
+  await img.decode();
+
+  // high-quality area-downsample to LOW via 2D canvas (good box-ish resample)
+  const dc = document.createElement('canvas'); dc.width=LOW; dc.height=LOW;
+  const dx = dc.getContext('2d'); dx.imageSmoothingEnabled=true; dx.imageSmoothingQuality='high';
+  // step down in halves for clean area average
+  let cur=document.createElement('canvas'); cur.width=img.width; cur.height=img.height;
+  cur.getContext('2d').drawImage(img,0,0);
+  let w=img.width,h=img.height;
+  while(w*0.5 > LOW){ const n=document.createElement('canvas'); n.width=Math.floor(w*0.5); n.height=Math.floor(h*0.5);
+    const nx=n.getContext('2d'); nx.imageSmoothingEnabled=true; nx.imageSmoothingQuality='high';
+    nx.drawImage(cur,0,0,n.width,n.height); cur=n; w=n.width; h=n.height; }
+  dx.drawImage(cur,0,0,LOW,LOW);
+
+  const W = COLS*TILE + (COLS+1)*PAD;
+  const H = ROWS*(TILE+LABEL) + (ROWS+1)*PAD;
+  const dpr = 2;
+  const cv = document.getElementById('c');
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+
+  // overlay labels with a 2D canvas layered? simpler: draw GL tiles, then labels via 2D on same canvas is not possible (webgl). Use separate 2D canvas overlay.
+  const gl = cv.getContext('webgl2',{preserveDrawingBuffer:true});
+  const prog = gl.createProgram();
+  gl.attachShader(prog,sh(gl,gl.VERTEX_SHADER,VERT));
+  gl.attachShader(prog,sh(gl,gl.FRAGMENT_SHADER,FRAG));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const quad=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1, 3,-1, -1,3]),gl.STATIC_DRAW);
+  const pl=gl.getAttribLocation(prog,'p'); gl.enableVertexAttribArray(pl);
+  gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+
+  function mktex(src,filter,flipY){const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY?1:0);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,0); return t;}
+  const texLow  = mktex(dc, gl.NEAREST, true);
+  const texFull = mktex(img, gl.LINEAR, false);
+
+  gl.uniform1i(gl.getUniformLocation(prog,'uLow'),0);
+  gl.uniform1i(gl.getUniformLocation(prog,'uFull'),1);
+  gl.uniform1f(gl.getUniformLocation(prog,'uSize'),LOW);
+  gl.uniform1i(gl.getUniformLocation(prog,'uFlipFull'),1);
+  // crop region (v-space, bottom-up). default = full frame. #zoom = face.
+  let crop=[0,0,1,1];
+  if(location.hash==='#zoom') crop=[0.36,0.50,0.30,0.30];   // face/hair detail
+  gl.uniform4f(gl.getUniformLocation(prog,'uCrop'), crop[0],crop[1],crop[2],crop[3]);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,texLow);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,texFull);
+  const uMode=gl.getUniformLocation(prog,'uMode');
+
+  gl.clearColor(0.082,0.09,0.11,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.SCISSOR_TEST);
+  TILES.forEach((t,idx)=>{
+    const col=idx%COLS, row=Math.floor(idx/COLS);
+    const x=PAD+col*(TILE+PAD);
+    const yTop=PAD+row*(TILE+LABEL+PAD);          // from top, in CSS px
+    const yGL=(H-(yTop+TILE))*dpr;                 // GL y is bottom-up; tile image sits above label
+    gl.viewport(x*dpr, yGL, TILE*dpr, TILE*dpr);
+    gl.scissor(x*dpr, yGL, TILE*dpr, TILE*dpr);
+    gl.uniform1i(uMode,t.mode);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  });
+  gl.disable(gl.SCISSOR_TEST);
+
+  // labels: overlay a transparent 2D canvas exactly on top
+  const ov=document.createElement('canvas'); ov.width=cv.width; ov.height=cv.height;
+  ov.style.cssText='position:absolute;left:0;top:0;width:'+W+'px;height:'+H+'px;pointer-events:none';
+  cv.parentNode.style.position='relative'; cv.parentNode.appendChild(ov);
+  const ox=ov.getContext('2d'); ox.scale(dpr,dpr); ox.font='600 13px -apple-system,Arial'; ox.textBaseline='middle';
+  TILES.forEach((t,idx)=>{
+    const col=idx%COLS, row=Math.floor(idx/COLS);
+    const x=PAD+col*(TILE+PAD);
+    const yLabel=PAD+row*(TILE+LABEL+PAD)+TILE+LABEL/2;
+    ox.fillStyle='#aeb6c2'; ox.fillText(t.name, x+2, yLabel);
+  });
+  const effPx = (crop[2]*LOW).toFixed(0);
+  document.getElementById('sub').textContent =
+    (location.hash==='#zoom'
+      ? `ZOOM into the face — only ~${effPx} source texels stretched across each ${TILE}px tile (~${(TILE/(crop[2]*LOW)).toFixed(0)}× magnification). This is where the filters diverge.`
+      : `source downsampled ${img.width}px → ${LOW}px, then upscaled in-shader. Each tile = same 192px input, different fragment-shader filter.`);
+  window.__ready=true;
+}
+main().catch(e=>{document.getElementById('sub').textContent='ERR: '+e;console.error(e);});
+</script>
+</body>
+</html>

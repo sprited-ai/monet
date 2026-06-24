@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;background:#15171c;color:#cdd3dc;font:13px/1.4 -apple-system,Helvetica,Arial}
+  #wrap{padding:16px}
+  h1{font-size:15px;font-weight:600;margin:0 0 4px}
+  .sub{color:#7a828e;margin:0 0 14px;font-size:12px}
+  canvas{display:block;border-radius:6px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Upscaling a self-generated test chart — 160px source → in-shader upscale</h1>
+  <p class="sub" id="sub">generating…</p>
+  <canvas id="c"></canvas>
+</div>
+<script>
+const SRCRES = 1280;   // ground-truth render res
+const LOW = 160;       // downsampled "render target"
+const TILE = 384, PAD = 10, LABEL = 26, COLS = 3, ROWS = 2;
+
+const TILES = [
+  {mode:99, name:'SOURCE (1280px ground truth)'},
+  {mode:1,  name:'Nearest (the 160px input)'},
+  {mode:2,  name:'Bilinear (hardware)'},
+  {mode:3,  name:'Bicubic — Catmull-Rom'},
+  {mode:4,  name:'Lanczos-3 (watch the ringing)'},
+  {mode:5,  name:'Anime4K-style edge-refine'},
+];
+
+// ---- procedurally generate the source image ----
+function genSource(){
+  const cv=document.createElement('canvas'); cv.width=SRCRES; cv.height=SRCRES;
+  const x=cv.getContext('2d'); const S=SRCRES;
+  // background gradient (banding test)
+  const g=x.createLinearGradient(0,0,S,S);
+  g.addColorStop(0,'#1b2a4a'); g.addColorStop(0.5,'#2d6e8e'); g.addColorStop(1,'#d8c27a');
+  x.fillStyle=g; x.fillRect(0,0,S,S);
+
+  // Siemens star (radial wedges) — top-left
+  const cx=S*0.27, cy=S*0.30, R=S*0.22, spokes=48;
+  x.save(); x.translate(cx,cy);
+  for(let i=0;i<spokes;i++){ x.fillStyle = (i%2? '#ffffff':'#0a0a0a');
+    x.beginPath(); x.moveTo(0,0);
+    const a0=i/spokes*Math.PI*2, a1=(i+1)/spokes*Math.PI*2;
+    x.arc(0,0,R,a0,a1); x.closePath(); x.fill(); }
+  x.restore();
+
+  // concentric rings — top-right
+  const rx=S*0.74, ry=S*0.28;
+  for(let r=S*0.20;r>2;r-=S*0.014){ x.strokeStyle=(Math.round(r/(S*0.014))%2?'#ffffff':'#101014');
+    x.lineWidth=S*0.007; x.beginPath(); x.arc(rx,ry,r,0,Math.PI*2); x.stroke(); }
+
+  // diagonal hairlines of varying thickness — bottom-left
+  x.strokeStyle='#f4f6ff';
+  for(let i=0;i<26;i++){ x.lineWidth=Math.max(1,(i%5)*1.4);
+    x.beginPath(); x.moveTo(S*0.04+i*S*0.018, S*0.56); x.lineTo(S*0.04+i*S*0.018+S*0.20, S*0.96); x.stroke(); }
+
+  // sharp color checkerboard — bottom-middle
+  const bx=S*0.56, by=S*0.56, bs=S*0.18, n=10, cell=bs/n;
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){ x.fillStyle=((i+j)&1)?'#ff3b6b':'#0c1d2e';
+    x.fillRect(bx+i*cell, by+j*cell, cell+0.5, cell+0.5); }
+
+  // text (edge sharpness) — bottom-right + center
+  x.fillStyle='#ffffff'; x.font='700 '+Math.round(S*0.075)+'px Georgia';
+  x.fillText('Monet', S*0.55, S*0.50);
+  x.fillStyle='#0a0a0a'; x.font='600 '+Math.round(S*0.030)+'px Helvetica';
+  x.fillText('upscaling test · 1234567890', S*0.55, S*0.85);
+
+  // a few crisp small dots (point spread)
+  x.fillStyle='#7CFFB2';
+  for(let i=0;i<8;i++){ x.beginPath(); x.arc(S*0.40+i*S*0.012, S*0.10, S*0.004, 0, 7); x.fill(); }
+  return cv;
+}
+
+const VERT = `#version 300 es
+in vec2 p; out vec2 v; void main(){ v=p*0.5+0.5; gl_Position=vec4(p,0.,1.);}`;
+const FRAG = `#version 300 es
+precision highp float;
+in vec2 v; out vec4 o;
+uniform sampler2D uLow, uFull;
+uniform float uSize; uniform int uMode, uFlipFull; uniform vec4 uCrop;
+vec4 tx(vec2 t){ vec4 c=texture(uLow,(t+0.5)/uSize); c.rgb*=c.a; return c; } // premultiplied
+vec4 bilinear(vec2 uv){ vec2 p=uv*uSize-0.5,f=fract(p),b=floor(p);
+  return mix(mix(tx(b),tx(b+vec2(1,0)),f.x), mix(tx(b+vec2(0,1)),tx(b+vec2(1,1)),f.x), f.y);}
+float wc(float x){x=abs(x); if(x<1.)return 1.5*x*x*x-2.5*x*x+1.; if(x<2.)return -0.5*x*x*x+2.5*x*x-4.*x+2.; return 0.;}
+vec4 bicubic(vec2 uv){ vec2 p=uv*uSize-0.5,f=fract(p),b=floor(p); vec4 s=vec4(0); float w=0.;
+  for(int j=-1;j<=2;j++)for(int i=-1;i<=2;i++){float k=wc(float(i)-f.x)*wc(float(j)-f.y); s+=tx(b+vec2(i,j))*k; w+=k;} return s/w;}
+float sinc(float x){if(abs(x)<1e-4)return 1.; x*=3.14159265; return sin(x)/x;}
+float wl(float x){if(abs(x)>=3.)return 0.; return sinc(x)*sinc(x/3.);}
+vec4 lanczos(vec2 uv){ vec2 p=uv*uSize-0.5,f=fract(p),b=floor(p); vec4 s=vec4(0); float w=0.;
+  for(int j=-2;j<=3;j++)for(int i=-2;i<=3;i++){float k=wl(float(i)-f.x)*wl(float(j)-f.y); s+=tx(b+vec2(i,j))*k; w+=k;} return s/w;}
+float luma(vec4 c){return dot(c.rgb,vec3(0.299,0.587,0.114));}
+vec4 anime4k(vec2 uv){ vec4 base=bicubic(uv); vec2 t=vec2(1.0/uSize); float l=luma(base);
+  float lx=luma(bicubic(uv+vec2(t.x,0)))-luma(bicubic(uv-vec2(t.x,0)));
+  float ly=luma(bicubic(uv+vec2(0,t.y)))-luma(bicubic(uv-vec2(0,t.y)));
+  vec2 g=vec2(lx,ly); float gl=length(g); if(gl<1e-3)return base; vec2 d=normalize(g);
+  vec4 fwd=bicubic(uv+d*t*0.45), bk=bicubic(uv-d*t*0.45);
+  return mix(base, (l<luma(fwd))?bk:fwd, clamp(gl*2.5,0.,0.7)); }
+void main(){ vec2 uv=uCrop.xy+v*uCrop.zw; vec4 c;        // premultiplied RGBA
+  if(uMode==99){ vec2 fv=uv; if(uFlipFull==1)fv.y=1.-fv.y; c=texture(uFull,fv); c.rgb*=c.a; }
+  else if(uMode==1)c=tx(floor(uv*uSize)); else if(uMode==2)c=bilinear(uv);
+  else if(uMode==3)c=bicubic(uv); else if(uMode==4)c=lanczos(uv); else c=anime4k(uv);
+  c.a=clamp(c.a,0.,1.); c.rgb=clamp(c.rgb,0.,1.);
+  float ch=mod(floor(v.x*16.)+floor(v.y*16.),2.);
+  vec3 bg=mix(vec3(0.20,0.22,0.25),vec3(0.30,0.32,0.36),ch);
+  o=vec4(bg*(1.-c.a)+c.rgb,1.);}`;
+function sh(gl,t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
+
+async function main(){
+  await document.fonts.ready;
+  const src=genSource();
+  // downsample src -> LOW via halving
+  let cur=src,w=src.width,h=src.height;
+  while(w*0.5>LOW){const n=document.createElement('canvas');n.width=Math.floor(w*0.5);n.height=Math.floor(h*0.5);
+    const nx=n.getContext('2d');nx.imageSmoothingEnabled=true;nx.imageSmoothingQuality='high';
+    nx.drawImage(cur,0,0,n.width,n.height);cur=n;w=n.width;h=n.height;}
+  const dc=document.createElement('canvas');dc.width=LOW;dc.height=LOW;
+  const dx=dc.getContext('2d');dx.imageSmoothingEnabled=true;dx.imageSmoothingQuality='high';
+  dx.drawImage(cur,0,0,LOW,LOW);
+
+  const W=COLS*TILE+(COLS+1)*PAD, H=ROWS*(TILE+LABEL)+(ROWS+1)*PAD, dpr=2;
+  const cv=document.getElementById('c'); cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+  const gl=cv.getContext('webgl2',{preserveDrawingBuffer:true});
+  const prog=gl.createProgram(); gl.attachShader(prog,sh(gl,gl.VERTEX_SHADER,VERT));
+  gl.attachShader(prog,sh(gl,gl.FRAGMENT_SHADER,FRAG)); gl.linkProgram(prog); gl.useProgram(prog);
+  const q=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,q);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const pl=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(pl);gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+  function mk(s,f,flip){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flip?1:0);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,s);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,0);return t;}
+  const texLow=mk(dc,gl.NEAREST,true), texFull=mk(src,gl.LINEAR,false);
+  gl.uniform1i(gl.getUniformLocation(prog,'uLow'),0); gl.uniform1i(gl.getUniformLocation(prog,'uFull'),1);
+  gl.uniform1f(gl.getUniformLocation(prog,'uSize'),LOW); gl.uniform1i(gl.getUniformLocation(prog,'uFlipFull'),1);
+  let crop=[0,0,1,1]; if(location.hash==='#zoom')crop=[0.05,0.55,0.45,0.45]; // siemens star + rings
+  gl.uniform4f(gl.getUniformLocation(prog,'uCrop'),crop[0],crop[1],crop[2],crop[3]);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texLow);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,texFull);
+  const uMode=gl.getUniformLocation(prog,'uMode');
+  gl.clearColor(0.082,0.09,0.11,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.enable(gl.SCISSOR_TEST);
+  TILES.forEach((t,idx)=>{const col=idx%COLS,row=Math.floor(idx/COLS);
+    const xx=PAD+col*(TILE+PAD), yTop=PAD+row*(TILE+LABEL+PAD), yGL=(H-(yTop+TILE))*dpr;
+    gl.viewport(xx*dpr,yGL,TILE*dpr,TILE*dpr);gl.scissor(xx*dpr,yGL,TILE*dpr,TILE*dpr);
+    gl.uniform1i(uMode,t.mode);gl.drawArrays(gl.TRIANGLES,0,3);});
+  gl.disable(gl.SCISSOR_TEST);
+  const ov=document.createElement('canvas');ov.width=cv.width;ov.height=cv.height;
+  ov.style.cssText='position:absolute;left:0;top:0;width:'+W+'px;height:'+H+'px;pointer-events:none';
+  cv.parentNode.style.position='relative';cv.parentNode.appendChild(ov);
+  const ox=ov.getContext('2d');ox.scale(dpr,dpr);ox.font='600 13px -apple-system,Arial';ox.textBaseline='middle';
+  TILES.forEach((t,idx)=>{const col=idx%COLS,row=Math.floor(idx/COLS);
+    const xx=PAD+col*(TILE+PAD), yL=PAD+row*(TILE+LABEL+PAD)+TILE+LABEL/2;
+    ox.fillStyle='rgba(0,0,0,0.55)';ox.fillRect(xx,yL-LABEL/2,TILE,LABEL);
+    ox.fillStyle='#cfe0ff';ox.fillText(t.name,xx+6,yL);});
+  document.getElementById('sub').textContent = location.hash==='#zoom'
+    ? `ZOOM into the Siemens star + rings — ${(crop[2]*LOW).toFixed(0)} source texels per tile. Star center = aliasing/moiré stress, rings = ringing stress.`
+    : `Self-generated 1280px chart → downsampled to ${LOW}px → upscaled in-shader. Siemens star, rings, hairlines, checkerboard, text — each stresses a different failure mode.`;
+  window.__ready=true;
+}
+main().catch(e=>{document.getElementById('sub').textContent='ERR: '+e;console.error(e);});
+</script>
+</body>
+</html>
