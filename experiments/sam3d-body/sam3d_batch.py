@@ -10,15 +10,18 @@ from PIL import Image
 from sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
 from tools.vis_utils import visualize_sample_together
 
-CLIP_DIR = "monet_clips"
-OUT_DIR = "sam3d_out"
+# Paths are env-overridable so the same script runs anywhere (gen-sidecars.sh sets
+# them); defaults match the gin layout. Existing <clip>.npz are skipped (no overwrite).
+CLIP_DIR = os.environ.get("CLIP_DIR", "monet_clips")
+OUT_DIR = os.environ.get("OUT_DIR", "sam3d_out")
+CKPT_DIR = os.environ.get("SAM3D_CKPT_DIR", "./checkpoints/sam-3d-body-dinov3")
 REND_DIR = os.path.join(OUT_DIR, "renders")
 os.makedirs(REND_DIR, exist_ok=True)
 
-device = torch.device("cuda")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model, cfg = load_sam_3d_body(
-    "./checkpoints/sam-3d-body-dinov3/model.ckpt", device=device,
-    mhr_path="./checkpoints/sam-3d-body-dinov3/assets/mhr_model.pt")
+    f"{CKPT_DIR}/model.ckpt", device=device,
+    mhr_path=f"{CKPT_DIR}/assets/mhr_model.pt")
 est = SAM3DBodyEstimator(sam_3d_body_model=model, model_cfg=cfg,
                          human_detector=None, human_segmentor=None, fov_estimator=None)
 

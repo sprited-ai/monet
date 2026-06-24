@@ -13,12 +13,32 @@ How to (re)generate the per-frame data that rides alongside each Monet clip. Eve
 All sidecar coords are normalized 0..1 to the **color (top-half) frame**, so they map
 straight onto the sprite via the same inverse-shader transform in the UI.
 
-Both generators are **resume-friendly**: re-running only processes clips whose output
-doesn't exist yet. So the standard flow is: **drop new `.mp4`s in `contents/monet/`,
-run both, commit.**
+Both generators are **resume-friendly + non-destructive**: re-running only creates
+sidecars that don't exist yet — nothing is overwritten. So the standard flow is:
+**drop new `.mp4`s in `contents/monet/`, run one command, commit.**
 
-> Automation TODO: this is documented-but-manual for now (per Jin — keep it simple,
-> wrap it later). A one-shot `regen-sidecars` wrapper is the obvious next step.
+## One command (anywhere)
+
+```bash
+./scripts/gen-sidecars.sh
+```
+
+Generic — runs on Mac or gin, doing whichever pipeline THIS machine has set up; the
+other is skipped with a note. Writes sidecars next to the clips in `$CONTENTS`, skipping
+any that already exist (`FORCE=1` to regenerate `s3body.json`). Every path is env-
+overridable so you can point it anywhere:
+
+```bash
+CONTENTS=/path/to/clips \
+BIZARRE_DIR=… BIZARRE_PY=…  SAM_DIR=… SAM_PY=…  NPZ_DIR=… \
+./scripts/gen-sidecars.sh
+```
+
+- On **Mac**: runs bizarre (`pose.json`); skips SAM unless its env is present.
+- On **gin**: runs SAM (`s3body.json`); skips bizarre unless its env is present.
+- Disk / speed / cross-machine transfer are intentionally **out of scope** — the script
+  just processes clips in `$CONTENTS` on the machine it runs on. Sections 1–2 below are
+  what it runs under the hood (and how to run each by hand).
 
 ---
 
