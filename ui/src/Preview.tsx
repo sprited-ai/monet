@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
-import WebCodecsStage from './WebCodecsStage'
 import type { PoseDoc, SamDoc, FaceDoc, MouthMode } from './Stage'
+// Lazy: WebCodecsStage drags in mp4box (~140 KB). Code-split it so only the WebCodecs
+// engine (opt-in toggle) downloads it; the default <video> path stays lean.
+const WebCodecsStage = lazy(() => import('./WebCodecsStage'))
 import type { Mouth } from './scene/types'
 
 // Apple Photos-style stage: a big player up top, and a horizontal filmstrip of
@@ -301,6 +303,7 @@ export default function Preview() {
       {current && (
         <div ref={stageWrapRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barH }}>
           {engine === 'webcodecs' ? (
+            <Suspense fallback={null}>
             <WebCodecsStage
               src={clipSrc(current.key)}
               scale={geom(current.name).scale}
@@ -323,6 +326,7 @@ export default function Preview() {
               onReady={() => setPlaying(true)}
               style={{ display: 'block', width: '100%', height: '100%' }}
             />
+            </Suspense>
           ) : (
             <Stage
               src={clipSrc(current.key)}
