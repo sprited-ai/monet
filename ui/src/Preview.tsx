@@ -55,7 +55,7 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
-  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('off') // x-ray: A=SAM, B=bizarre (off by default; face rig is its own toggle)
+  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('sam') // x-ray: A=SAM, B=bizarre (on by default; face rig is its own toggle)
   const [faceRig, setFaceRig] = useState(true) // anime-face-detector 28-kp rig — its own overlay, ON by default
   const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
   const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data (bizarre)
