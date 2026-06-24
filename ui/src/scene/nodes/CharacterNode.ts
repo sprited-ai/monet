@@ -160,7 +160,7 @@ export class CharacterNode implements SceneNode {
     // interval, so round() would lead the erased mouth up to one frame ahead.
     const idx = Math.max(0, Math.min(md.frames.length - 1, Math.floor(v.currentTime * (md.fps || 24))))
     const fr = md.frames[idx]
-    if (!fr) return off
+    if (!fr || !fr.poly) return off
     const p = s.poly
     for (let i = 0; i < 16; i++) {
       p[i * 2] = fr.poly[i][0]

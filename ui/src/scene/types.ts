@@ -49,7 +49,7 @@ export type Pose = {
 // `skin` is the flat-fill colour (0..255), `box` the AABB for a shader early-out.
 export type MouthFrame = {
   f: number
-  poly: [number, number][]
+  poly: [number, number][] | null // null on frames before the SAM3 prompt lands (e.g. back-facing)
   skin: [number, number, number]
   box: [number, number, number, number]
 }

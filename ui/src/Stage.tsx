@@ -155,10 +155,10 @@ function drawOverlay(
 // transform as the pose overlay. Lets us verify the tracking before trusting the erase.
 function drawMouthContour(
   ctx: CanvasRenderingContext2D,
-  poly: [number, number][],
+  poly: [number, number][] | null,
   project: (ux: number, uy: number) => [number, number],
 ) {
-  if (poly.length < 2) return
+  if (!poly || poly.length < 2) return
   ctx.lineWidth = 2
   ctx.strokeStyle = 'rgba(255,70,170,0.95)'
   ctx.beginPath()
@@ -652,7 +652,7 @@ export default function Stage({
       if (cur.current.mouthMode === 'erase' && edoc && edoc.frames.length && eav.duration > 0) {
         const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(eav.currentTime * (edoc.fps || 24))))
         const ef = edoc.frames[ei]
-        if (ef) {
+        if (ef?.poly) {
           const pb = polyBuf.current
           for (let i = 0; i < 16; i++) {
             pb[i * 2] = ef.poly[i][0]
@@ -744,16 +744,19 @@ export default function Stage({
               const skp = sdoc.kp[si]
               if (skp) drawSamOverlay(octx, skp, project)
             }
-          } else if (cur.current.overlaySource === 'face') {
-            // x-ray C: the anime-face-detector 28-point rig, frame-indexed like pose.
-            const fdoc = slotFace.current[slot]
-            if (fdoc && fdoc.faces.length && av.duration > 0) {
-              const fi = Math.max(0, Math.min(fdoc.faces.length - 1, Math.floor(av.currentTime * (fdoc.fps || 24))))
-              const ff = fdoc.faces[fi]
-              if (ff) drawFaceOverlay(octx, ff.kp, project)
-            }
           } else if (fr) {
             drawOverlay(octx, fr, project, cssW, cssH) // x-ray B: bizarre com/face/kp
+          }
+        }
+        // Face rig — its OWN overlay (not an x-ray mode): the anime-face-detector
+        // 28-point landmarks, on by default. Frame-indexed like pose; coexists with
+        // whatever x-ray (if any) is showing since both paint this same canvas.
+        if (cur.current.showFace) {
+          const fdoc = slotFace.current[slot]
+          if (fdoc && fdoc.faces.length && av.duration > 0) {
+            const fi = Math.max(0, Math.min(fdoc.faces.length - 1, Math.floor(av.currentTime * (fdoc.fps || 24))))
+            const ff = fdoc.faces[fi]
+            if (ff) drawFaceOverlay(octx, ff.kp, project)
           }
         }
         // Mouth contour ('contour' mode): the SAM3 polygon as a debug outline.
@@ -763,7 +766,7 @@ export default function Stage({
           // interval, so round() would lead the contour up to one frame.
           const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(av.currentTime * (mdoc.fps || 24))))
           const mf = mdoc.frames[mi]
-          if (mf) drawMouthContour(octx, mf.poly, project)
+          if (mf?.poly) drawMouthContour(octx, mf.poly, project)
         }
       }
       if (!playingFired.current) {
