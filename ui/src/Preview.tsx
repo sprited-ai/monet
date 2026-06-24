@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import Stage from './Stage'
 import type { PoseDoc, SamDoc, FaceDoc, MouthMode } from './Stage'
 // Lazy: WebCodecsStage drags in mp4box (~140 KB). Code-split it so only the WebCodecs
 // engine (opt-in toggle) downloads it; the default <video> path stays lean.
@@ -55,7 +54,7 @@ export default function Preview() {
   const [framings, setFramings] = useState<Record<string, Framing>>({})
   const [framingOf, setFramingOf] = useState<Record<string, string>>({})
   const [sel, setSel] = useState(0) // index of the selected clip
-  const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
+  const [, setSeq] = useState(0) // kept only to no-op the legacy reload calls (WebCodecsStage reloads on src change)
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
   const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('sam') // x-ray: A=SAM, B=bizarre (on by default; face rig is its own toggle)
@@ -66,7 +65,6 @@ export default function Preview() {
   const [face, setFace] = useState<FaceDoc | null>(null) // current clip's anime-face-detector rig
   const [mouth, setMouth] = useState<Mouth | null>(null) // current clip's SAM3 mouth track
   const [mouthMode, setMouthMode] = useState<MouthMode>('contour') // contour → erase → off
-  const [engine, setEngine] = useState<'video' | 'webcodecs'>('video') // player backend (A/B test)
   const [scrub, setScrub] = useState<number | null>(null) // null = autoplay; a frame index pins it
   const [total, setTotal] = useState(0) // total frames (for the scrubber range), set on clip change
   const sliderRef = useRef<HTMLInputElement>(null) // scrubber input, driven by ref to avoid per-frame re-render
@@ -184,8 +182,6 @@ export default function Preview() {
     }, 90)
   }, [sel])
 
-  // Selected clip loops: when it ends, replay the same one (bump seq).
-  const onClipEnd = useCallback(() => setSeq((s) => s + 1), [])
 
   // Left/Right arrows step clips globally — no need to focus the filmstrip first.
   // Skipped when typing in a field or when a control (e.g. the zoom slider) is
@@ -302,8 +298,7 @@ export default function Preview() {
           keeps Monet undistorted and fully visible (never under the strip). */}
       {current && (
         <div ref={stageWrapRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barH }}>
-          {engine === 'webcodecs' ? (
-            <Suspense fallback={null}>
+          <Suspense fallback={null}>
             <WebCodecsStage
               src={clipSrc(current.key)}
               scale={geom(current.name).scale}
@@ -326,33 +321,7 @@ export default function Preview() {
               onReady={() => setPlaying(true)}
               style={{ display: 'block', width: '100%', height: '100%' }}
             />
-            </Suspense>
-          ) : (
-            <Stage
-              src={clipSrc(current.key)}
-              seq={seq}
-              scale={geom(current.name).scale}
-              anchor={geom(current.name).anchor}
-              zoom={zoom}
-              pose={pose}
-              s3body={s3body}
-              face={face}
-              mouth={mouth}
-              mouthMode={mouthMode}
-              fps={clipFps}
-              scrub={scrub}
-              onFrame={onFrame}
-              showOverlay={overlay !== 'off'}
-              overlaySource={overlay === 'sam' ? 'sam' : 'bizarre'}
-              showFace={faceRig}
-              showShadow={shadow}
-              onClipEnd={onClipEnd}
-              onPlaying={() => setPlaying(true)}
-              blendMs={300}
-              freezeAt={TEST?.freezeAt}
-              style={{ display: 'block', width: '100%', height: '100%' }}
-            />
-          )}
+          </Suspense>
           {/* Poster shows until playback actually starts (muted autoplay), then fades. */}
           <img
             src={thumbSrc(current.key)}
@@ -423,13 +392,6 @@ export default function Preview() {
             {mouthMode === 'contour' ? '◈' : mouthMode === 'erase' ? '◉' : '○'} mouth
             {mouthMode === 'contour' ? ' · contour' : mouthMode === 'erase' ? ' · erase' : ''}
             {mouthMode !== 'off' && !mouth && current && <span style={{ opacity: 0.8 }}>· no data</span>}
-          </button>
-          <button
-            onClick={() => setEngine((e) => (e === 'video' ? 'webcodecs' : 'video'))}
-            title="player backend: <video>+rVFC vs WebCodecs (frame-exact erase). WebCodecs = single clip, no blend/x-ray."
-            style={pill(engine === 'webcodecs')}
-          >
-            {engine === 'webcodecs' ? '◉ WebCodecs' : '○ video'}
           </button>
         </div>
 
