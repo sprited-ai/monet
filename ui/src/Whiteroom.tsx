@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SpeakerLoudIcon, SpeakerOffIcon } from '@radix-ui/react-icons'
 import { Renderer } from './scene/Renderer'
 import { createRecognizer, resumeAudio, speak, stopSpeak, sttAvailable } from './voice'
-import type { Framing, Pose } from './scene/types'
+import type { Framing, Mouth, Pose } from './scene/types'
 
 // The white room — Monet's home (/). A real 3D scene (perspective camera) with
 // Monet as a Ragnarok-style billboarded stacked-alpha sprite, in an empty gradient
@@ -66,6 +66,7 @@ export default function Whiteroom() {
   const framings = useRef<Record<string, Framing>>({})
   const indexed = useRef<Record<string, Indexed>>({})
   const poseCache = useRef<Record<string, Promise<Pose | null>>>({}) // per-clip pose JSON, fetched once
+  const mouthCache = useRef<Record<string, Promise<Mouth | null>>>({}) // per-clip mouth JSON, fetched once
   const script = useRef<string[]>([]) // queued clips (a reply's reaction + talk reps)
   const speaking = useRef(false)
   const lastIdle = useRef(-1)
@@ -95,9 +96,21 @@ export default function Whiteroom() {
     return poseCache.current[name]
   }, [])
 
+  // Each clip's mouth JSON (SAM3 track), fetched once and cached. Missing → null, and
+  // the mouth simply isn't erased (the clip plays untouched).
+  const mouthFor = useCallback((name: string): Promise<Mouth | null> => {
+    if (!mouthCache.current[name]) {
+      mouthCache.current[name] = fetch(`/contents/monet/${name}.mouth.json`)
+        .then((r) => (r.ok ? (r.json() as Promise<Mouth>) : null))
+        .catch(() => null)
+    }
+    return mouthCache.current[name]
+  }, [])
+
   const play = useCallback(
-    (name: string) => renderer.current?.character.setClip(clipSrc(name), framingFor(name), poseFor(name)),
-    [framingFor, poseFor],
+    (name: string) =>
+      renderer.current?.character.setClip(clipSrc(name), framingFor(name), poseFor(name), mouthFor(name)),
+    [framingFor, poseFor, mouthFor],
   )
 
   const pickAutonomous = useCallback(() => {

@@ -42,3 +42,15 @@ export type Pose = {
   fps: number
   poses: ({ com: [number, number]; face: [number, number] } | null)[]
 }
+
+// A clip's per-frame mouth region (from contents/monet/<clip>.mouth.json), tracked
+// by SAM3. Coords are normalized 0..1 to the color frame (= sprite shader u-space).
+// `poly` is the raw 16-gon (dilation/feather are applied analytically in the shader),
+// `skin` is the flat-fill colour (0..255), `box` the AABB for a shader early-out.
+export type MouthFrame = {
+  f: number
+  poly: [number, number][]
+  skin: [number, number, number]
+  box: [number, number, number, number]
+}
+export type Mouth = { clip: string; fps: number; n: number; frames: MouthFrame[] }

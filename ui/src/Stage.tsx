@@ -80,6 +80,12 @@ const POSE_EDGES: [number, number][] = [
   [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], [5, 11], [6, 12], [11, 12],
   [11, 13], [13, 15], [12, 14], [14, 16], [15, 21], [16, 22], [0, 5], [0, 6],
 ]
+// Compact label per bizarre keypoint (coco_keypoints_ext order).
+const POSE_LABELS: string[] = [
+  'nose', 'eyeL', 'eyeR', 'earL', 'earR', 'shL', 'shR', 'elbL', 'elbR', 'wrL', 'wrR',
+  'hipL', 'hipR', 'knL', 'knR', 'ankL', 'ankR', 'noseRt', 'bodyUp', 'thbL', 'thbR',
+  'toeL', 'toeR',
+]
 
 // Draw one frame's pose overlay. `project(ux,uy) -> [sx,sy]` inverts the Stage
 // shader transform, mapping normalized color-frame coords to screen pixels.
@@ -122,6 +128,25 @@ function drawOverlay(
   ctx.strokeRect(F[0] - half, F[1] - half, half * 2, half * 2)
   ctx.fillStyle = 'rgba(70,150,255,0.95)'
   ctx.beginPath(); ctx.arc(F[0], F[1], 3.5, 0, 7); ctx.fill()
+  // labels (white text + dark halo), matching the SAM overlay
+  ctx.font = '11px ui-monospace, monospace'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 3
+  ctx.lineJoin = 'round'
+  const lbl = (t: string, x: number, y: number) => {
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)'
+    ctx.strokeText(t, x + 4, y)
+    ctx.fillStyle = 'rgba(255,255,255,0.96)'
+    ctx.fillText(t, x + 4, y)
+  }
+  for (let i = 0; i < fr.kp.length; i++) {
+    const k = fr.kp[i]
+    if (!k || k[2] < KP_MIN) continue
+    const P = project(k[0], k[1])
+    lbl(POSE_LABELS[i] ?? String(i), P[0], P[1])
+  }
+  lbl('com', C[0], C[1])
+  lbl('face', F[0], F[1])
   void w
 }
 
@@ -586,7 +611,7 @@ export default function Stage({
       let fr: PoseFrame | null = null
       if (doc && doc.poses.length && av.duration > 0) {
         const n = doc.poses.length
-        const idx = Math.max(0, Math.min(n - 1, Math.round(av.currentTime * (doc.fps || 24))))
+        const idx = Math.max(0, Math.min(n - 1, Math.floor(av.currentTime * (doc.fps || 24))))
         const raw = doc.poses[idx]
         if (raw) {
           // Temporal smoothing (dt-based EMA, tau≈90ms): glides com/face, killing
@@ -633,7 +658,7 @@ export default function Stage({
             // x-ray A: the SAM-3D-Body rig (70 kp + bones), frame-indexed like pose.
             const sdoc = slotS3body.current[slot]
             if (sdoc && sdoc.kp.length && av.duration > 0) {
-              const si = Math.max(0, Math.min(sdoc.kp.length - 1, Math.round(av.currentTime * (sdoc.fps || 24))))
+              const si = Math.max(0, Math.min(sdoc.kp.length - 1, Math.floor(av.currentTime * (sdoc.fps || 24))))
               const skp = sdoc.kp[si]
               if (skp) drawSamOverlay(octx, skp, project)
             }

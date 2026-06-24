@@ -1,7 +1,7 @@
 import { createProgram, createQuad, createVideoTexture, uniforms } from '../gl-utils'
 import spriteVert from '../shaders/sprite.vert?raw'
 import spriteFrag from '../shaders/sprite.frag?raw'
-import type { Frame, Framing, Pose, SceneNode } from '../types'
+import type { Frame, Framing, Mouth, Pose, SceneNode } from '../types'
 
 // Monet's body: a billboarded stacked-alpha sprite (docs/008 + docs/016). Two
 // <video> slots cross-dissolve in a single premultiplied draw — ported from the
@@ -22,6 +22,8 @@ type Slot = {
   scl: number // framing scale
   fas: number // frame aspect (frameW / frameH) — fallback if video dims unknown
   pose: Pose | null // this clip's per-frame pose (drives the contact shadow); may arrive late
+  mouth: Mouth | null // this clip's per-frame mouth polygon (erased in the shader); may arrive late
+  poly: Float32Array // scratch buffer (16 vec2) reused each frame to upload the mouth uniform
 }
 
 export class CharacterNode implements SceneNode {
@@ -55,6 +57,7 @@ export class CharacterNode implements SceneNode {
     this.u = uniforms(gl, this.prog, [
       'u_view', 'u_proj', 'u_pos', 'u_quad', 'u_right', 'u_feet', 'tA', 'tB', 'mixv', 'feather',
       'quadAspect', 'ancA', 'ancB', 'base', 'sclA', 'sclB', 'fasA', 'fasB', 'u_ambient',
+      'uMouthA', 'uMouthB', 'uSkinA', 'uSkinB', 'uBoxA', 'uBoxB', 'uHasA', 'uHasB', 'uMargin',
     ])
     const mkVideo = () => {
       const v = document.createElement('video')
@@ -75,6 +78,8 @@ export class CharacterNode implements SceneNode {
       scl: 1,
       fas: 1,
       pose: null as Pose | null,
+      mouth: null as Mouth | null,
+      poly: new Float32Array(32),
     }))
   }
 
@@ -93,15 +98,24 @@ export class CharacterNode implements SceneNode {
 
   // pose may be a Promise (the JSON fetch races the video load) — it's assigned to
   // the slot when it resolves, guarded so a later clip reusing the slot wins.
-  setClip(src: string, framing: Framing, pose?: Promise<Pose | null> | Pose | null) {
+  setClip(
+    src: string,
+    framing: Framing,
+    pose?: Promise<Pose | null> | Pose | null,
+    mouth?: Promise<Mouth | null> | Mouth | null,
+  ) {
     const p = this.params(framing)
     const slot = this.first ? 0 : 1 - this.active
     const s = this.slots[slot]
     Object.assign(s, p)
     s.pose = null
-    const tok = ++this.poseToken[slot]
+    s.mouth = null
+    const tok = ++this.poseToken[slot] // one guard for this clip's late pose + mouth fetches
     Promise.resolve(pose ?? null).then((pd) => {
       if (this.poseToken[slot] === tok) s.pose = pd
+    })
+    Promise.resolve(mouth ?? null).then((md) => {
+      if (this.poseToken[slot] === tok) s.mouth = md
     })
     s.video.src = src
     s.video.load() // Safari won't refetch a reused (ended) element on a bare src swap
@@ -132,6 +146,27 @@ export class CharacterNode implements SceneNode {
     const fr = pose.poses[idx]
     if (!fr) return null
     return (fr.com[0] - s.anc[0]) * s.scl * this.fas(s) * QUAD[1]
+  }
+
+  // Per-slot mouth-erase uniforms for the current video time. Fills the slot's scratch
+  // `poly` buffer (16 vec2, u-space) and returns skin/box/has; has=0 → shader leaves the
+  // mouth untouched. Frame-indexed exactly like groundOffset (currentTime × fps).
+  private mouthAt(s: Slot): { skin: [number, number, number]; box: [number, number, number, number]; has: number } {
+    const md = s.mouth
+    const v = s.video
+    const off = { skin: [0, 0, 0] as [number, number, number], box: [0, 0, 0, 0] as [number, number, number, number], has: 0 }
+    if (!md || !md.frames.length || !(v.duration > 0)) return off
+    // floor, not round: the <video> holds frame floor(t*fps) across the whole frame
+    // interval, so round() would lead the erased mouth up to one frame ahead.
+    const idx = Math.max(0, Math.min(md.frames.length - 1, Math.floor(v.currentTime * (md.fps || 24))))
+    const fr = md.frames[idx]
+    if (!fr) return off
+    const p = s.poly
+    for (let i = 0; i < 16; i++) {
+      p[i * 2] = fr.poly[i][0]
+      p[i * 2 + 1] = fr.poly[i][1]
+    }
+    return { skin: [fr.skin[0] / 255, fr.skin[1] / 255, fr.skin[2] / 255], box: fr.box, has: 1 }
   }
 
   update({ now }: Frame) {
@@ -193,6 +228,18 @@ export class CharacterNode implements SceneNode {
     gl.uniform2fv(this.u.ancB, this.slots[1].anc)
     gl.uniform1f(this.u.sclB, this.slots[1].scl)
     gl.uniform1f(this.u.fasB, this.fas(this.slots[1]))
+    // Mouth erase: fill each slot's scratch poly buffer, then upload its 16-gon + skin.
+    const mA = this.mouthAt(this.slots[0])
+    const mB = this.mouthAt(this.slots[1])
+    gl.uniform2fv(this.u.uMouthA, this.slots[0].poly)
+    gl.uniform3fv(this.u.uSkinA, mA.skin)
+    gl.uniform4fv(this.u.uBoxA, mA.box)
+    gl.uniform1f(this.u.uHasA, mA.has)
+    gl.uniform2fv(this.u.uMouthB, this.slots[1].poly)
+    gl.uniform3fv(this.u.uSkinB, mB.skin)
+    gl.uniform4fv(this.u.uBoxB, mB.box)
+    gl.uniform1f(this.u.uHasB, mB.has)
+    gl.uniform1f(this.u.uMargin, 0.006) // ~4px dilation at the 640px frame; analytic, so crisp under zoom
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
