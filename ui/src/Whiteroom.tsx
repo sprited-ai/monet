@@ -167,17 +167,33 @@ export default function Whiteroom() {
       const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
       talkClip.current = talk
       speaking.current = true
-      setCaption(reply.text)
       setPhase('speaking')
       script.current = reaction ? [reaction] : [] // a one-shot reaction, then advance() loops `talk`
       advance() // interrupt the idle clip and start reacting/speaking now
-      if (mutedRef.current) {
-        // silent: hold the caption + talk loop for an estimated read time
+      const holdMuted = () => {
+        // hold the caption + talk loop for an estimated read time, then idle
         const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
         speakTimer.current = window.setTimeout(endSpeaking, capMs)
+      }
+      if (mutedRef.current) {
+        setCaption(reply.text) // no voice → show the line right away
+        holdMuted()
       } else {
-        // voiced: talk until the audio finishes
-        speak(reply.text).finally(endSpeaking)
+        // Voiced: hold the caption until the audio actually starts (onStart), so the
+        // line and the sound land together instead of the caption leading by the TTS
+        // latency. If TTS never starts (error), fall back to the muted read-timer so
+        // the line still shows.
+        let started = false
+        speak(reply.text, () => {
+          started = true
+          setCaption(reply.text)
+        }).then(() => {
+          if (started) endSpeaking()
+          else {
+            setCaption(reply.text)
+            holdMuted()
+          }
+        })
       }
     },
     [advance, endSpeaking],
