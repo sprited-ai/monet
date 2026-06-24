@@ -96,6 +96,13 @@ export class StreamingClip {
     this.fps = fps
   }
 
+  // True once at least one frame is decoded and on hand (the decoder starts pumping from
+  // frame 0 in startDecoder, so this flips shortly after create()). Used to gate a clip
+  // transition on the incoming clip actually having a picture.
+  get ready(): boolean {
+    return this.cache.size > 0
+  }
+
   static async create(url: string, fps = 24): Promise<StreamingClip> {
     const clip = new StreamingClip(fps)
     const { config, chunks, w, h } = await demux(url)
