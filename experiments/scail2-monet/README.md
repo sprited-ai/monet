@@ -140,6 +140,27 @@ do**: a real human's motion retargeted onto a chibi with no rig, no pose extract
 for talk clips. E2 + E5 = the full open-ended path: *any* human performance → Monet clip →
 stacked-alpha sprite. The fixed 64-clip library can become an open vocabulary.
 
+## Latency — how close to "live"? (measured)
+
+Min generation time on gin's Blackwell (4-step, seedance driving):
+
+| res | clip | gen time | gen rate |
+|---|---|---|---|
+| 320² | 2.6 s (41f) | **8 s** | 5.1 fps |
+| 320² | 1.6 s (25f) | **4 s** | 6.2 fps |
+| 480² | 2.6 s (41f) | **12 s** | 3.4 fps |
+| 640² | 2.6 s (41f) | **28 s** | 1.5 fps |
+
+`out/latency_320_vs_640.png`: 320px (8 s) vs 640px (28 s) — 320 is softer but **still
+usable**, identity + gesture intact.
+
+**Read:** true frame-streaming real-time (≥16 fps gen) is **not** reachable with full-clip
+diffusion — even 320²/4-step is ~3× too slow. That needs a causal/streaming arch
+(CausVid / Self-Forcing), a separate R&D track. **But near-live on-demand is real:** a
+short custom reaction in **~8 s (320) / ~28 s (640)**. So three runtime tiers:
+pre-rendered library (0 latency) · on-demand async (~8–28 s) · true live (different
+lightweight rig, e.g. THA4 face-rig at 60 fps). Layer them; don't pick one.
+
 ## E5 — stacked-alpha integration (done ✅)
 
 Proves the back half: a SCAIL-2 clip → a real transparent Monet sprite. `matte_scail2.py`
