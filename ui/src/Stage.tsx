@@ -664,11 +664,15 @@ export default function Stage({
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
       gl.uniform1f(sclBLoc, slotScale.current[1])
-      // Display time = the frame actually on screen (rVFC mediaTime), not the requested
-      // one (currentTime). Overlays + erase index by this so they stay locked to the
-      // picture mid-scrub. Falls back to currentTime before the first frame paints / if
-      // rVFC is unsupported.
-      const dispT = (slot: number, v: HTMLVideoElement) => (hasRVFC ? presented[slot] || v.currentTime : v.currentTime)
+      // Display time = the frame the overlays + erase should index, chosen to match what
+      // the GL texture (texImage2D from the <video>) is showing. PLAYING: texImage2D
+      // tracks the freshest frame ≈ currentTime (rVFC's mediaTime lags it by ~1 frame a
+      // third of the time), so currentTime matches best. PAUSED/SCRUBBING: the picture is
+      // the last PRESENTED frame (the landed seek), which currentTime can lead by tens of
+      // ms — so use rVFC mediaTime to stay locked to it. Best of both: no lead in scrub,
+      // no trail in playback. Falls back to currentTime if rVFC is unsupported.
+      const dispT = (slot: number, v: HTMLVideoElement) =>
+        hasRVFC && v.paused ? presented[slot] || v.currentTime : v.currentTime
       // Mouth erase ('erase' mode): upload the active clip's current-frame 16-gon + skin.
       const eslot = active.current
       const eav = eslot === 0 ? a : b
