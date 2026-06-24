@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SpeakerLoudIcon, SpeakerOffIcon } from '@radix-ui/react-icons'
 import { Renderer } from './scene/Renderer'
-import { resumeAudio, speak, stopSpeak } from './voice'
+import { createRecognizer, resumeAudio, speak, stopSpeak, sttAvailable } from './voice'
 import type { Framing, Pose } from './scene/types'
 
 // The white room — Monet's home (/). A real 3D scene (perspective camera) with
@@ -47,7 +47,7 @@ const FALLBACK_FRAMING: Framing = { frame: [1184, 1184], origin: [593, 1030], sc
 
 export default function Whiteroom() {
   const [caption, setCaption] = useState<string | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'thinking' | 'speaking'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'thinking' | 'speaking' | 'listening'>('idle')
   const [focused, setFocused] = useState(false)
   const [debug, setDebug] = useState(false)
   const [, force] = useState(0) // re-render the debug panel when sliders move
@@ -75,6 +75,9 @@ export default function Whiteroom() {
   const speakTimer = useRef(0) // muted: ends speaking after a read-time estimate
   const mutedRef = useRef(muted)
   mutedRef.current = muted
+  const inputRef = useRef<HTMLInputElement>(null) // shows your live transcript while talking
+  const recognizer = useRef<ReturnType<typeof createRecognizer>>(null)
+  const listening = useRef(false)
 
   const framingFor = useCallback((name: string): Framing => {
     const key = indexed.current[name]?.framing ?? 'regular'
@@ -178,6 +181,38 @@ export default function Whiteroom() {
     [advance, endSpeaking],
   )
 
+  // Push-to-talk: hold Space to talk. Her voice hushes (barge-in), your live
+  // transcript appears in the text box, release sends it. Chrome-only (Web Speech).
+  const startListening = useCallback(() => {
+    if (!sttAvailable || listening.current || thinking.current) return
+    listening.current = true
+    stopSpeak() // hush her if she was mid-reply
+    resumeAudio() // the keypress is a user gesture → unlock audio for her answer
+    speaking.current = false
+    window.clearTimeout(speakTimer.current)
+    setCaption(null)
+    setPhase('listening')
+    const rec = createRecognizer({
+      lang: 'ko-KR',
+      onPartial: (t) => {
+        if (inputRef.current) inputRef.current.value = t
+      },
+    })
+    recognizer.current = rec
+    rec?.start()
+  }, [])
+
+  const stopListening = useCallback(async () => {
+    if (!listening.current) return
+    listening.current = false
+    const rec = recognizer.current
+    recognizer.current = null
+    const text = rec ? await rec.stop() : ''
+    if (inputRef.current) inputRef.current.value = ''
+    if (text.trim()) send(text)
+    else setPhase('idle')
+  }, [send])
+
   // Mount the scene; load framing geometry; greet on arrival.
   useEffect(() => {
     if (!canvasRef.current || !videoBoxRef.current) return
@@ -231,7 +266,40 @@ export default function Whiteroom() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const indicator = phase === 'thinking' ? '#e0a23c' : phase === 'speaking' ? '#c97a52' : 'transparent'
+  // Hold Space to talk (ignored while typing in the box).
+  useEffect(() => {
+    const typing = () => {
+      const t = document.activeElement?.tagName
+      return t === 'INPUT' || t === 'TEXTAREA'
+    }
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && !typing()) {
+        e.preventDefault()
+        startListening()
+      }
+    }
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && listening.current) {
+        e.preventDefault()
+        stopListening()
+      }
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+    }
+  }, [startListening, stopListening])
+
+  const indicator =
+    phase === 'listening'
+      ? '#4a78dc'
+      : phase === 'thinking'
+        ? '#e0a23c'
+        : phase === 'speaking'
+          ? '#c97a52'
+          : 'transparent'
 
   return (
     <div
@@ -273,9 +341,10 @@ export default function Whiteroom() {
       {/* The type box — faint at rest so the room shows through, bright on focus.
           IME-safe Enter (won't submit a half-composed Korean syllable). */}
       <input
+        ref={inputRef}
         type="text"
         autoComplete="off"
-        placeholder="say something…"
+        placeholder={sttAvailable ? 'say something — or hold Space to talk' : 'say something…'}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onKeyDown={(e) => {

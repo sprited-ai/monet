@@ -97,3 +97,70 @@ export async function speak(text: string, onStart?: () => void): Promise<void> {
     onStart?.() // audio is now playing → caption is in sync
   })
 }
+
+// --- ears: push-to-talk speech recognition (Web Speech API, Chrome-only) ---
+// Ported from anima v34. Hold a key → start(); release → stop() resolves the
+// final transcript. onPartial streams the interim text while you speak.
+type SR = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start(): void
+  stop(): void
+  onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+const SRClass = (window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR })
+  .SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: new () => SR }).webkitSpeechRecognition || null
+
+export const sttAvailable = !!SRClass
+
+export function createRecognizer(opts: { lang?: string; onPartial?: (t: string) => void }) {
+  if (!SRClass) return null
+  const rec = new SRClass()
+  rec.lang = opts.lang || 'ko-KR' // handles mixed Korean/English; Jin speaks Korean
+  rec.continuous = true // keep listening until we stop (push-to-talk)
+  rec.interimResults = true
+  let finalText = ''
+  let running = false
+  let resolveStop: ((t: string) => void) | null = null
+  rec.onresult = (e) => {
+    let interim = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i]
+      if (r.isFinal) finalText += r[0].transcript
+      else interim += r[0].transcript
+    }
+    opts.onPartial?.((finalText + ' ' + interim).trim())
+  }
+  rec.onerror = (e) => console.warn('[voice] stt', e.error)
+  rec.onend = () => {
+    running = false
+    resolveStop?.(finalText.trim())
+    resolveStop = null
+  }
+  return {
+    start() {
+      if (running) return
+      finalText = ''
+      running = true
+      try {
+        rec.start()
+      } catch {
+        running = false
+      }
+    },
+    stop(): Promise<string> {
+      if (!running) return Promise.resolve(finalText.trim())
+      return new Promise<string>((res) => {
+        resolveStop = res
+        try {
+          rec.stop()
+        } catch {
+          res(finalText.trim())
+        }
+      })
+    },
+  }
+}
