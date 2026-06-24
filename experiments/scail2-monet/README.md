@@ -129,7 +129,12 @@ do**: a real human's motion retargeted onto a chibi with no rig, no pose extract
 
 - 6-step: `out/scail2_monet_e2_human_00001.mp4` (92 s). Hands a bit soft (tiny chibi
   hands + fast gesture + speed LoRA).
-- 25-step quality: `scail2_monet_e2_human_q` (cleaner; see file).
+- 25-step quality: `out/scail2_monet_e2_human_q_00001.mp4` (761 s). Sharper face/hands/
+  line art (`out/e2_6vs25_hands.png`).
+- **Completed talk clip** = 25-step → BiRefNet matte → stacked-alpha:
+  `out/scail2_monet_e2_talk_stacked.mp4` (640×1280, real clip format) +
+  `out/e2_talk_transparency.png` (transparent preview). **This is a drop-in
+  `contents/monet/` talk clip** — the first one ever made from a real human performance.
 
 **Why it matters:** conversational gesture motion is exactly what whiteroom Monet needs
 for talk clips. E2 + E5 = the full open-ended path: *any* human performance → Monet clip →
