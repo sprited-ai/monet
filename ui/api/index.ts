@@ -107,19 +107,19 @@ app.post('/api/chat', async (c) => {
     const data = (await res.json()) as { content?: { text?: string }[] }
     const reply = parseReply(data?.content?.[0]?.text ?? '')
 
-    // Persist anything new she chose to remember — off the response path (waitUntil),
-    // and silenced on error so a write hiccup never surfaces as a fake reply.
+    // Persist anything new she chose to remember, and return what was actually stored
+    // (post-dedup) so the live memory view can append it without a racy re-read. Awaited
+    // — a D1 batch insert is a few ms next to the LLM call — but guarded, so a write
+    // hiccup leaves `stored` empty and never breaks the reply.
+    let stored: string[] = []
     if (uid && c.env.DB && reply.remember.length) {
-      const db = c.env.DB
-      const save = () =>
-        remember(db, uid, reply.remember, mem.memories, now, mem.turns).catch((e) => console.warn('mem save', e))
       try {
-        c.executionCtx.waitUntil(save())
-      } catch {
-        await save()
+        stored = await remember(c.env.DB, uid, reply.remember, mem.memories, now, mem.turns)
+      } catch (e) {
+        console.warn('mem save', e)
       }
     }
-    return c.json({ text: reply.text, emotion: reply.emotion })
+    return c.json({ text: reply.text, emotion: reply.emotion, stored })
   } catch (e) {
     console.warn('chat error', e)
     return c.json(err(`brain unreachable — ${e instanceof Error ? e.message : String(e)}`))

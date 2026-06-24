@@ -46,7 +46,8 @@ export async function readMemories(db: D1Database, uid: string): Promise<UserMem
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
 // Persist newly-learned facts, skipping any we already hold (case-insensitive exact
-// match against what was loaded this turn). Returns how many were actually stored.
+// match against what was loaded this turn). Returns the facts actually stored, so the
+// caller can hand them straight to the live memory view (no racy re-read needed).
 export async function remember(
   db: D1Database,
   uid: string,
@@ -54,7 +55,7 @@ export async function remember(
   existing: string[],
   now: number,
   turn: number,
-): Promise<number> {
+): Promise<string[]> {
   const have = new Set(existing.map(norm))
   const fresh: string[] = []
   for (const f of facts) {
@@ -65,8 +66,8 @@ export async function remember(
     have.add(n)
     fresh.push(c)
   }
-  if (!fresh.length) return 0
+  if (!fresh.length) return []
   const stmt = db.prepare(`INSERT INTO memories (user_id, content, created_at, turn) VALUES (?, ?, ?, ?)`)
   await db.batch(fresh.map((c) => stmt.bind(uid, c, now, turn)))
-  return fresh.length
+  return fresh
 }

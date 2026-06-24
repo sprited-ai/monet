@@ -52,6 +52,9 @@ export default function Whiteroom() {
   const [focused, setFocused] = useState(false)
   const [debug, setDebug] = useState(false)
   const [, force] = useState(0) // re-render the debug panel when sliders move
+  // What Monet remembers about you — shown live in the debug overlay. Baseline fetched
+  // when the panel opens; each reply appends the facts it just stored (no racy re-read).
+  const [memory, setMemory] = useState<{ turns: number; memories: string[] } | null>(null)
   // Voice is opt-in: muted by default (no autoplay, no surprise ElevenLabs spend).
   const [muted, setMuted] = useState(() => {
     try {
@@ -148,6 +151,14 @@ export default function Whiteroom() {
     play(pickAutonomous())
   }, [play, pickAutonomous])
 
+  // Pull the current memory baseline (called when the debug panel opens).
+  const refreshMemory = useCallback(() => {
+    fetch('/api/memory', { headers: { 'x-monet-uid': getUid() } })
+      .then((r) => r.json())
+      .then((m) => setMemory(m))
+      .catch(() => {})
+  }, [])
+
   const send = useCallback(
     async (text: string) => {
       const msg = text.trim()
@@ -159,6 +170,7 @@ export default function Whiteroom() {
       history.current = history.current.slice(-16)
       setPhase('thinking')
       let reply: { text: string; emotion: Emotion } = { text: '', emotion: 'calm' }
+      let stored: string[] = []
       try {
         const r = await fetch('/api/chat', {
           method: 'POST',
@@ -167,6 +179,7 @@ export default function Whiteroom() {
         })
         const data = await r.json()
         reply = { text: (data.text || '').trim(), emotion: (data.emotion || 'calm') as Emotion }
+        if (Array.isArray(data.stored)) stored = data.stored
       } catch (e) {
         // transparent error, not a fake in-character line
         reply = { text: `⚠ network error — ${e instanceof Error ? e.message : 'fetch failed'}`, emotion: 'calm' }
@@ -174,6 +187,9 @@ export default function Whiteroom() {
       thinking.current = false
       if (!reply.text) reply.text = '⚠ empty reply'
       history.current.push({ role: 'assistant', content: reply.text })
+      // Live memory: every reply is a turn (+1); append anything she just remembered.
+      // Only while the panel has a baseline (memory != null) — re-opening re-syncs.
+      setMemory((m) => (m ? { turns: m.turns + 1, memories: stored.length ? [...m.memories, ...stored] : m.memories } : m))
 
       const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
       talkClip.current = talk
@@ -449,25 +465,29 @@ export default function Whiteroom() {
         {muted ? <SpeakerOffIcon width={18} height={18} /> : <SpeakerLoudIcon width={18} height={18} />}
       </button>
 
-      {debug && renderer.current && <DebugPanel r={renderer.current} onChange={() => force((n) => n + 1)} />}
+      {debug && renderer.current && (
+        <DebugPanel r={renderer.current} onChange={() => force((n) => n + 1)} memory={memory} onRefresh={refreshMemory} />
+      )}
     </div>
   )
 }
 
 // Backtick debug: toggle the embedded effects + nudge the camera, live, and show
 // what Monet remembers about you (fetched fresh each time the panel opens).
-function DebugPanel({ r, onChange }: { r: Renderer; onChange: () => void }) {
-  const [mem, setMem] = useState<{ turns: number; memories: string[] } | null>(null)
+function DebugPanel({
+  r,
+  onChange,
+  memory,
+  onRefresh,
+}: {
+  r: Renderer
+  onChange: () => void
+  memory: { turns: number; memories: string[] } | null
+  onRefresh: () => void
+}) {
   useEffect(() => {
-    let alive = true
-    fetch('/api/memory', { headers: { 'x-monet-uid': getUid() } })
-      .then((res) => res.json())
-      .then((m) => alive && setMem(m))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
+    onRefresh()
+  }, [onRefresh]) // sync the baseline when the panel opens; replies keep it live after
   const row = (label: string, node: React.ReactNode) => (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
       <span>{label}</span>
@@ -529,9 +549,9 @@ function DebugPanel({ r, onChange }: { r: Renderer; onChange: () => void }) {
       {slider('eye z', r.cam.eye[2], 2, 9, 0.05, (v) => (r.cam.eye[2] = v))}
       {slider('look y', r.cam.target[1], 0, 2.5, 0.05, (v) => (r.cam.target[1] = v))}
       <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '4px 0' }} />
-      <div style={{ opacity: 0.6 }}>memory{mem ? ` · ${mem.turns} turns` : ' …'}</div>
-      {mem && mem.memories.length === 0 && <div style={{ opacity: 0.5 }}>(nothing yet — talk to her)</div>}
-      {mem?.memories.map((m, i) => (
+      <div style={{ opacity: 0.6 }}>memory{memory ? ` · ${memory.turns} turns` : ' …'}</div>
+      {memory && memory.memories.length === 0 && <div style={{ opacity: 0.5 }}>(nothing yet — talk to her)</div>}
+      {memory?.memories.map((m, i) => (
         <div key={i} style={{ opacity: 0.85, lineHeight: 1.35 }}>
           • {m}
         </div>
