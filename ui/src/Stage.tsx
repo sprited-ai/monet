@@ -491,24 +491,15 @@ export default function Stage({
     const b = vRef[1].current!
     a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
     b.muted = true
-    // Lock overlays to the frame the compositor is ACTUALLY showing, not the one we
-    // requested. Setting video.currentTime updates instantly, but the <video> paints
-    // the seeked frame tens of ms later — so an overlay indexed by currentTime leads the
-    // picture by 1–4 frames while scrubbing. requestVideoFrameCallback's mediaTime is the
-    // presented frame's timestamp; index overlays by THAT and the rig can't drift from
-    // the clip. (During playback mediaTime≈currentTime, so this is a no-op there.)
+    // Frame-accurate sync: upload each video's texture INSIDE its rVFC callback (wired up
+    // below, once the textures exist) and stamp the presented frame's mediaTime in the same
+    // step, so the GL texture and the frame index the overlays/erase use are ALWAYS the
+    // same frame. texImage2D in the rAF loop races the media clock by ±1 frame, which the
+    // shader erase (applied straight onto the texture) exposes as a desynced mouth. Driving
+    // the upload off rVFC removes the race. Fallback (no rVFC): upload in the rAF loop.
     const presented: [number, number] = [0, 0]
     const hasRVFC = 'requestVideoFrameCallback' in a
-    const regVFC = (v: HTMLVideoElement, slot: 0 | 1) => {
-      if (!hasRVFC) return
-      const cb = (_now: number, meta: VideoFrameCallbackMetadata) => {
-        presented[slot] = meta.mediaTime
-        v.requestVideoFrameCallback(cb)
-      }
-      v.requestVideoFrameCallback(cb)
-    }
-    regVFC(a, 0)
-    regVFC(b, 1)
+    let vfcCancelled = false
     // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
     // capture after the buffer is composited+cleared, blanking the canvas. Keeping
     // the buffer makes the frozen frame survive any capture path. Off in normal use
@@ -554,6 +545,25 @@ export default function Stage({
     const texB = mkTex()
     gl.uniform1i(gl.getUniformLocation(pr, 'tA'), 0)
     gl.uniform1i(gl.getUniformLocation(pr, 'tB'), 1)
+    // On each presented frame, upload it to its slot's texture AND stamp presented[slot] —
+    // atomically, so the texture and the index are the same frame. Re-arms itself; stops
+    // when the effect tears down (vfcCancelled).
+    const regVFC = (v: HTMLVideoElement, slot: 0 | 1, tex: WebGLTexture | null, unit: number) => {
+      if (!hasRVFC) return
+      const cb = (_now: number, meta: VideoFrameCallbackMetadata) => {
+        if (vfcCancelled) return
+        presented[slot] = meta.mediaTime
+        if (v.readyState >= 2) {
+          gl.activeTexture(unit)
+          gl.bindTexture(gl.TEXTURE_2D, tex)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v)
+        }
+        v.requestVideoFrameCallback(cb)
+      }
+      v.requestVideoFrameCallback(cb)
+    }
+    regVFC(a, 0, texA, gl.TEXTURE0)
+    regVFC(b, 1, texB, gl.TEXTURE1)
     gl.uniform1f(gl.getUniformLocation(pr, 'fw'), Math.max(0.0001, feather))
     const mixLoc = gl.getUniformLocation(pr, 'mixv')
     const zoomLoc = gl.getUniformLocation(pr, 'zoom')
@@ -640,22 +650,26 @@ export default function Stage({
         const e = t * t * (3 - 2 * t)
         mixVal.current = t >= 1 ? mixTarget.current : mixFrom.current + (mixTarget.current - mixFrom.current) * e
       }
-      // While scrubbing, keep the active video frozen so texImage2D uploads the PINNED
+      // While scrubbing, keep the active video paused so it stays pinned on the seeked
       // frame — the scrub effect's pause() can be raced by a mid-drag seek that leaves the
-      // element briefly playing. Frozen texture + mediaTime-indexed overlay = exact lock.
+      // element briefly playing, which would let it drift off the pinned frame.
       if (scrubRef.current != null) {
         const sv = active.current === 0 ? a : b
         if (!sv.paused) sv.pause()
       }
-      if (a.readyState >= 2) {
-        gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, texA)
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
-      }
-      if (b.readyState >= 2) {
-        gl.activeTexture(gl.TEXTURE1)
-        gl.bindTexture(gl.TEXTURE_2D, texB)
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
+      // Textures are normally uploaded in the rVFC callback (frame-accurate, atomic with
+      // presented[]). Without rVFC, upload the freshest frame here each rAF instead.
+      if (!hasRVFC) {
+        if (a.readyState >= 2) {
+          gl.activeTexture(gl.TEXTURE0)
+          gl.bindTexture(gl.TEXTURE_2D, texA)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
+        }
+        if (b.readyState >= 2) {
+          gl.activeTexture(gl.TEXTURE1)
+          gl.bindTexture(gl.TEXTURE_2D, texB)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
+        }
       }
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
@@ -671,18 +685,12 @@ export default function Stage({
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
       gl.uniform1f(sclBLoc, slotScale.current[1])
-      // Display time = the frame the overlays + erase should index, chosen to match what
-      // the GL texture (texImage2D from the <video>) is showing. SCRUBBING (pinned): the
-      // picture is the last PRESENTED frame (the landed seek), which currentTime can lead
-      // by tens of ms — index by rVFC mediaTime to stay locked. AUTOPLAY: texImage2D
-      // tracks the freshest frame ≈ currentTime (mediaTime lags it ~1 frame a third of
-      // the time), so currentTime matches best. The ground truth for "scrubbing" is
-      // scrubRef, NOT v.paused — a mid-drag seek can leave the video briefly playing,
-      // which (under v.paused) let the overlay fall back to currentTime and LEAD the
-      // picture by a frame. Falls back to currentTime if rVFC is unsupported.
-      const scrubbing = scrubRef.current != null
+      // The GL texture is uploaded in lockstep with presented[slot] (rVFC), so the frame
+      // the texture shows IS presented[slot] — index the overlays + erase by it and they
+      // can't drift from the picture, whether playing or scrubbing. Without rVFC the
+      // texture is the rAF upload (freshest ≈ currentTime), so use that.
       const dispT = (slot: number, v: HTMLVideoElement) =>
-        hasRVFC && scrubbing ? presented[slot] || v.currentTime : v.currentTime
+        hasRVFC ? presented[slot] || v.currentTime : v.currentTime
       // Mouth erase ('erase' mode): upload the active clip's current-frame 16-gon + skin.
       const eslot = active.current
       const eav = eslot === 0 ? a : b
@@ -824,6 +832,7 @@ export default function Stage({
     }
     raf = requestAnimationFrame(draw)
     return () => {
+      vfcCancelled = true // stop the rVFC upload loop (re-arming callbacks)
       cancelAnimationFrame(raf)
       ro.disconnect()
       window.removeEventListener('resize', sizeCanvas)
