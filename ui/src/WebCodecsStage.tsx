@@ -11,7 +11,7 @@ import {
   type SamDoc,
   type FaceDoc,
 } from './Stage'
-import { decodeClip, webCodecsSupported, type DecodedClip } from './webcodecs/ClipDecoder'
+import { StreamingClip, webCodecsSupported } from './webcodecs/ClipDecoder'
 
 // A WebCodecs-backed twin of <Stage> for ONE clip — proof that frame-exact mouth erase is
 // possible (no <video>, no rVFC). The clip is decoded to a VideoFrame[] up front and the
@@ -102,6 +102,7 @@ export default function WebCodecsStage({
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const shadowRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported' | 'error'>('loading')
+  const [errMsg, setErrMsg] = useState('')
 
   // latest props for the loop (avoid re-running the GL effect on every prop change)
   const cur = useRef({ scale, anchor, baseline, zoom, feather, mouth, mouthMode, mouthMargin, pose, s3body, face, showOverlay, overlaySource, showFace, showShadow, fps })
@@ -178,7 +179,7 @@ export default function WebCodecsStage({
     ro.observe(cv)
     window.addEventListener('resize', sizeCanvas)
 
-    let clip: DecodedClip | null = null
+    let clip: StreamingClip | null = null
     let cancelled = false
     let raf = 0
     let startMs = -1 // play-clock origin; -1 = (re)seed it
@@ -195,9 +196,9 @@ export default function WebCodecsStage({
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw)
-      if (!clip || clip.frames.length === 0) return
+      if (!clip || clip.total === 0) return
       const c = cur.current
-      const total = clip.frames.length
+      const total = clip.total
       const fasV = clip.width / (clip.height / 2)
 
       let idx: number
@@ -212,7 +213,12 @@ export default function WebCodecsStage({
         idx = ((idx % total) + total) % total
       }
 
-      const frame = clip.frames[idx]
+      // Drive streaming decode toward idx; get the frame actually on hand + its real index,
+      // and lock everything (texture + overlays) to THAT so they never disagree mid-decode.
+      const got = clip.frameAt(idx)
+      if (!got) return // nothing decoded yet (first frames / just after a reset)
+      idx = got.index
+      const frame = got.frame
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, frame)
@@ -296,7 +302,7 @@ export default function WebCodecsStage({
       onFrameRef.current?.(idx, total)
     }
 
-    decodeClip(src, cur.current.fps)
+    StreamingClip.create(src, cur.current.fps)
       .then((c) => {
         if (cancelled) {
           c.close()
@@ -309,6 +315,7 @@ export default function WebCodecsStage({
       })
       .catch((e) => {
         console.error('WebCodecsStage decode failed:', e)
+        setErrMsg(String(e?.message || e))
         if (!cancelled) setStatus('error')
       })
 
@@ -327,10 +334,16 @@ export default function WebCodecsStage({
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
       <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
       {status !== 'ready' && (
-        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', font: '13px ui-monospace, monospace' }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', font: '12px ui-monospace, monospace', textAlign: 'center', padding: 16 }}>
           {status === 'loading' && 'decoding clip…'}
           {status === 'unsupported' && 'WebCodecs not supported in this browser'}
-          {status === 'error' && 'decode error (see console)'}
+          {status === 'error' && (
+            <div style={{ color: '#e66', maxWidth: 320, wordBreak: 'break-word' }}>
+              decode error:
+              <br />
+              {errMsg || '(see console)'}
+            </div>
+          )}
         </div>
       )}
     </div>

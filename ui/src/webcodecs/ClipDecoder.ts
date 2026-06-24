@@ -1,20 +1,15 @@
-// Frame-exact clip decoder (WebCodecs). Demuxes an mp4 with mp4box, then decodes EVERY
-// frame up-front into a presentation-ordered VideoFrame[]. The player indexes that array
-// directly, so the frame on screen and the frame index the mouth-erase uses are the SAME
-// by construction — no <video> seek/compositor ±1 jitter (the reason erase desynced).
+// Frame-exact clip decoder (WebCodecs). Demuxes an mp4 with mp4box, then STREAMS frames:
+// decodes just ahead of the play/scrub head and closes frames as they fall behind, so only
+// a handful of VideoFrames (~a few MB) are ever live. The player indexes decoded frames
+// directly, so the frame on screen and the index the mouth-erase uses are the SAME — no
+// <video> seek/compositor ±1 jitter (the reason erase desynced).
 //
-// Up-front decode caches the whole clip (~1.2 MB/frame). Fine for the desktop /preview
-// validation; production streams instead (decode-as-you-go, ~1 frame live — see
-// experiments/webcodecs-poc/streaming.html). See [[monet-webcodecs-mouth-compositing]].
+// Why streaming and not decode-all: keeping every frame alive (~1.2 MB each → ~150 MB for a
+// 121-frame clip) overflows a MOBILE decoder's output-buffer pool — it stalls (can't decode
+// more until frames are freed) and flush() never resolves ("decoding clip…" forever on
+// Android). Streaming + close() keeps it tiny. See [[monet-webcodecs-mouth-compositing]] and
+// experiments/webcodecs-poc/streaming.html.
 import MP4Box from './mp4box.mjs'
-
-export type DecodedClip = {
-  frames: VideoFrame[] // presentation order; frames[i] === clip frame i
-  fps: number
-  width: number
-  height: number
-  close(): void
-}
 
 export function webCodecsSupported(): boolean {
   return typeof window !== 'undefined' && 'VideoDecoder' in window
@@ -35,7 +30,9 @@ function getDescription(file: any, track: any): Uint8Array {
   throw new Error('ClipDecoder: no codec description box (avcC/hvcC/…) in track')
 }
 
-async function demux(url: string): Promise<{ config: VideoDecoderConfig; chunks: EncodedVideoChunk[]; w: number; h: number }> {
+async function demux(
+  url: string,
+): Promise<{ config: VideoDecoderConfig; chunks: EncodedVideoChunk[]; w: number; h: number }> {
   const file = MP4Box.createFile()
   const chunks: EncodedVideoChunk[] = []
   let config: VideoDecoderConfig | null = null
@@ -74,35 +71,126 @@ async function demux(url: string): Promise<{ config: VideoDecoderConfig; chunks:
   return { config: config!, chunks, w, h }
 }
 
-// Decode the whole clip into a presentation-ordered frame array.
-export async function decodeClip(url: string, fps = 24): Promise<DecodedClip> {
-  const { config, chunks, w, h } = await demux(url)
-  const frames: VideoFrame[] = []
-  let decErr: unknown = null
-  const decoder = new VideoDecoder({
-    output: (f) => frames.push(f),
-    error: (e) => (decErr = e),
-  })
-  decoder.configure(config)
-  for (const c of chunks) decoder.decode(c)
-  await decoder.flush()
-  decoder.close()
-  if (decErr) throw decErr
-  frames.sort((a, b) => a.timestamp - b.timestamp) // decode order → presentation order
-  return {
-    frames,
-    fps,
-    width: w,
-    height: h,
-    close() {
-      for (const f of frames) {
-        try {
-          f.close()
-        } catch {
-          /* already closed */
+// A streaming, frame-exact clip. `frameAt(i)` (called once per rAF) drives decoding toward
+// frame i and returns the frame actually on hand + its index, keeping memory to a small
+// window. Our clips are single-GOP (one keyframe), so any decode starts at 0; sequential
+// PLAYBACK is the natural order (cheap), and a backward jump (scrub-back / loop wrap)
+// restarts the decoder from 0.
+export class StreamingClip {
+  fps: number
+  width = 0
+  height = 0
+  total = 0
+  private chunks: EncodedVideoChunk[] = []
+  private config!: VideoDecoderConfig
+  private decoder: VideoDecoder | null = null
+  private cache = new Map<number, VideoFrame>()
+  private decodeNext = 0 // index the decoder's next output will have
+  private feedNext = 0 // next chunk index to feed
+  private want = 0 // current target index (from the consumer)
+  private closed = false
+  private readonly AHEAD = 8 // decode up to this many frames past `want`
+  private readonly BEHIND = 2 // keep this many frames before `want` (smooths tiny stalls)
+
+  private constructor(fps: number) {
+    this.fps = fps
+  }
+
+  static async create(url: string, fps = 24): Promise<StreamingClip> {
+    const clip = new StreamingClip(fps)
+    const { config, chunks, w, h } = await demux(url)
+    clip.config = config
+    clip.chunks = chunks
+    clip.width = w
+    clip.height = h
+    clip.total = chunks.length
+    clip.startDecoder()
+    return clip
+  }
+
+  private startDecoder() {
+    try {
+      this.decoder?.close()
+    } catch {
+      /* not configured */
+    }
+    for (const f of this.cache.values()) f.close()
+    this.cache.clear()
+    this.decodeNext = 0
+    this.feedNext = 0
+    this.decoder = new VideoDecoder({
+      output: (frame) => {
+        if (this.closed) {
+          frame.close()
+          return
         }
+        this.cache.set(this.decodeNext, frame)
+        this.decodeNext++
+        // evict frames that fell well behind the play head
+        for (const [k, f] of this.cache) {
+          if (k < this.want - this.BEHIND) {
+            f.close()
+            this.cache.delete(k)
+          }
+        }
+        this.pump()
+      },
+      error: (e) => console.error('StreamingClip decode error:', e),
+    })
+    this.decoder.configure(this.config)
+    this.pump()
+  }
+
+  private pump() {
+    const dec = this.decoder
+    if (!dec || this.closed) return
+    // feed chunks while the decoder is within AHEAD of the target and its queue is shallow
+    while (
+      this.feedNext < this.chunks.length &&
+      this.decodeNext + dec.decodeQueueSize <= this.want + this.AHEAD &&
+      dec.decodeQueueSize < 4
+    ) {
+      dec.decode(this.chunks[this.feedNext++])
+    }
+  }
+
+  // Drive decoding toward `index` and return the frame to show (exact if ready, else the
+  // nearest earlier cached frame) plus the index that frame actually is — so overlays can
+  // lock to what's on screen, not to the requested index, during brief catch-up.
+  frameAt(index: number): { frame: VideoFrame; index: number } | null {
+    if (this.total === 0) return null
+    index = ((index % this.total) + this.total) % this.total
+    const minKey = this.cache.size ? Math.min(...this.cache.keys()) : this.decodeNext
+    if (!this.cache.has(index) && index < minKey) {
+      // backward jump (scrub-back or loop wrap) past what we still hold → restart from 0
+      this.want = index
+      this.startDecoder()
+    } else {
+      this.want = index
+      this.pump()
+    }
+    const exact = this.cache.get(index)
+    if (exact) return { frame: exact, index }
+    // nearest earlier available frame (avoids a black flash while catching up)
+    let best: VideoFrame | null = null
+    let bestK = -1
+    for (const [k, f] of this.cache) {
+      if (k <= index && k > bestK) {
+        bestK = k
+        best = f
       }
-      frames.length = 0
-    },
+    }
+    return best ? { frame: best, index: bestK } : null
+  }
+
+  close() {
+    this.closed = true
+    try {
+      this.decoder?.close()
+    } catch {
+      /* */
+    }
+    for (const f of this.cache.values()) f.close()
+    this.cache.clear()
   }
 }
