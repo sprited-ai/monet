@@ -100,6 +100,25 @@ function drawOverlay(
   void w
 }
 
+// Soft contact-shadow ellipse drawn BEHIND the character (a layer under the GL
+// canvas). Centered under her feet at screen (footX, footY); footX tracks the
+// smoothed CoM so it slides with her sway. radius scales with her on-screen size.
+function drawShadow(ctx: CanvasRenderingContext2D, footX: number, footY: number, rx: number) {
+  const ry = Math.max(3, rx * 0.2) // flat ellipse
+  ctx.save()
+  ctx.translate(footX, footY)
+  ctx.scale(rx, ry)
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
+  g.addColorStop(0, 'rgba(40,30,28,0.34)')
+  g.addColorStop(0.6, 'rgba(40,30,28,0.15)')
+  g.addColorStop(1, 'rgba(40,30,28,0)')
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.arc(0, 0, 1, 0, 7)
+  ctx.fill()
+  ctx.restore()
+}
+
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
 // it stays blank. Keep the source element in the render tree but tiny + transparent.
 const HIDDEN_VIDEO: CSSProperties = {
@@ -136,6 +155,7 @@ type Props = {
   zoom?: number // global user zoom multiplier
   pose?: PoseDoc | null // this clip's pose data, for the optional overlay
   showOverlay?: boolean // draw the pose / com / face overlay ("x-ray vision")
+  showShadow?: boolean // draw a soft contact shadow under her feet (tracks com x)
   onClipEnd?: () => void
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
@@ -156,6 +176,7 @@ export default function Stage({
   zoom = 1,
   pose = null,
   showOverlay = false,
+  showShadow = false,
   onClipEnd,
   onPlaying,
   blendMs = 150,
@@ -165,6 +186,7 @@ export default function Stage({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
+  const shadowRef = useRef<HTMLCanvasElement>(null)
   const vRef = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)]
   const active = useRef(0) // slot currently playing / shown (0 or 1)
   const mixVal = useRef(0) // 0 = slot0, 1 = slot1 (what the shader shows)
@@ -184,8 +206,8 @@ export default function Stage({
   const lastLoaded = useRef(0) // slot the most recent clip loaded into (pose fetch lands here)
   // Temporal smoothing state for the com/face markers (dt-based EMA in the draw loop).
   const smooth = useRef<{ com: [number, number]; face: [number, number]; idx: number; slot: number; t: number } | null>(null)
-  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay }) // latest props for the loop
-  cur.current = { scale, anchor, baseline, zoom, showOverlay }
+  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay, showShadow }) // latest props for the loop
+  cur.current = { scale, anchor, baseline, zoom, showOverlay, showShadow }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
@@ -256,9 +278,12 @@ export default function Stage({
     const fasBLoc = gl.getUniformLocation(pr, 'fasB')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
-    // 2D overlay context (pose / com / face), sized in lockstep with the GL canvas.
+    // 2D overlay context (pose / com / face) + shadow context (behind the sprite),
+    // both sized in lockstep with the GL canvas.
     const oc = overlayRef.current!
     const octx = oc.getContext('2d')
+    const sc = shadowRef.current!
+    const sctx = sc.getContext('2d')
 
     // Size the backing buffer to the DISPLAY rect (not the clip's 640² frame), so a
     // wide viewport renders wide and shows the frame's sides instead of cropping to a
@@ -278,6 +303,10 @@ export default function Stage({
       if (oc.width !== w || oc.height !== h) {
         oc.width = w
         oc.height = h
+      }
+      if (sc.width !== w || sc.height !== h) {
+        sc.width = w
+        sc.height = h
       }
       aspect = w / h
     }
@@ -345,47 +374,66 @@ export default function Stage({
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-      // Pose overlay — invert the shader transform for the ACTIVE slot's current
-      // frame, then draw in CSS px (ctx pre-scaled by dpr). Tracks the newest clip;
-      // during a blend it briefly lags the outgoing one (fine for a dev overlay).
+      // Resolve the active slot's current pose frame + smoothed com/face ONCE; the
+      // shadow (behind the sprite) and the x-ray overlay (on top) both read it. The
+      // transform inverts the sprite shader so normalized frame coords → screen px.
+      const slot = active.current
+      const av = slot === 0 ? a : b
+      const doc = slotPose.current[slot]
+      const anc = slotAnchor.current[slot]
+      const kk = slotScale.current[slot] * cur.current.zoom
+      const fas = fa(av)
+      const base = cur.current.baseline
+      const project = (ux: number, uy: number): [number, number] => [
+        (0.5 + ((ux - anc[0]) * (kk * fas)) / aspect) * cssW,
+        (base[1] + (uy - anc[1]) * kk) * cssH,
+      ]
+      let fr: PoseFrame | null = null
+      if (doc && doc.poses.length && av.duration > 0) {
+        const n = doc.poses.length
+        const idx = Math.max(0, Math.min(n - 1, Math.round(av.currentTime * (doc.fps || 24))))
+        const raw = doc.poses[idx]
+        if (raw) {
+          // Temporal smoothing (dt-based EMA, tau≈90ms): glides com/face, killing
+          // jitter + the 24→60fps stair-step. Reset on clip change / loop wrap / seek.
+          const s = smooth.current
+          if (!s || s.slot !== slot || idx < s.idx || idx - s.idx > 4) {
+            smooth.current = { com: [...raw.com], face: [...raw.face], idx, slot, t: now }
+          } else {
+            const aa = 1 - Math.exp(-Math.max(0, (now - s.t) / 1000) / 0.09)
+            s.com[0] += (raw.com[0] - s.com[0]) * aa
+            s.com[1] += (raw.com[1] - s.com[1]) * aa
+            s.face[0] += (raw.face[0] - s.face[0]) * aa
+            s.face[1] += (raw.face[1] - s.face[1]) * aa
+            s.idx = idx
+            s.t = now
+          }
+          fr = { ...raw, com: smooth.current.com, face: smooth.current.face }
+        }
+      }
+
+      // Contact shadow — drawn BEHIND the sprite. footX tracks the CoM (feet anchor if
+      // no pose); footY = the feet baseline; radius from the bbox width (else default).
+      if (sctx) {
+        sctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        sctx.clearRect(0, 0, cssW, cssH)
+        if (cur.current.showShadow && av.duration > 0) {
+          const [footX, footY] = project(fr ? fr.com[0] : anc[0], anc[1])
+          let rx = cssW * 0.13
+          if (fr) {
+            const x0 = project(fr.bbox[0], anc[1])[0]
+            const x1 = project(fr.bbox[0] + fr.bbox[2], anc[1])[0]
+            rx = Math.abs(x1 - x0) * 0.42
+          }
+          drawShadow(sctx, footX, footY, rx)
+        }
+      }
+
+      // X-ray overlay — drawn ON TOP.
       if (octx) {
         octx.setTransform(dpr, 0, 0, dpr, 0, 0)
         octx.clearRect(0, 0, cssW, cssH)
-        const slot = active.current
-        const av = slot === 0 ? a : b
-        const doc = slotPose.current[slot]
-        if (cur.current.showOverlay && doc && doc.poses.length && av.duration > 0) {
-          const n = doc.poses.length
-          const idx = Math.max(0, Math.min(n - 1, Math.round(av.currentTime * (doc.fps || 24))))
-          const fr = doc.poses[idx]
-          if (fr) {
-            const anc = slotAnchor.current[slot]
-            const k = slotScale.current[slot] * cur.current.zoom
-            const fas = fa(av)
-            const base = cur.current.baseline
-            const project = (ux: number, uy: number): [number, number] => [
-              (0.5 + ((ux - anc[0]) * (k * fas)) / aspect) * cssW,
-              (base[1] + (uy - anc[1]) * k) * cssH,
-            ]
-            // Temporal smoothing (dt-based EMA, tau≈90ms): glides the com/face
-            // markers, killing per-frame jitter and the 24→60fps stair-step. Resets
-            // on clip change / loop wrap / seek so it doesn't swoop across a cut.
-            const s = smooth.current
-            if (!s || s.slot !== slot || idx < s.idx || idx - s.idx > 4) {
-              smooth.current = { com: [...fr.com], face: [...fr.face], idx, slot, t: now }
-            } else {
-              const a = 1 - Math.exp(-Math.max(0, (now - s.t) / 1000) / 0.09)
-              s.com[0] += (fr.com[0] - s.com[0]) * a
-              s.com[1] += (fr.com[1] - s.com[1]) * a
-              s.face[0] += (fr.face[0] - s.face[0]) * a
-              s.face[1] += (fr.face[1] - s.face[1]) * a
-              s.idx = idx
-              s.t = now
-            }
-            const sm = smooth.current
-            drawOverlay(octx, { ...fr, com: sm.com, face: sm.face }, project, cssW, cssH)
-          }
-        }
+        if (cur.current.showOverlay && fr) drawOverlay(octx, fr, project, cssW, cssH)
       }
       if (!playingFired.current) {
         const av = active.current === 0 ? a : b
@@ -455,18 +503,19 @@ export default function Stage({
     slotPose.current[lastLoaded.current] = pose
   }, [pose])
 
+  // Three stacked layers that fill the wrapper: shadow (behind) → character (GL) →
+  // x-ray overlay (on top). The GL canvas is transparent, so the shadow shows through
+  // around her and she draws over it — a real contact shadow.
+  const FILL: CSSProperties = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'block' }
   return (
-    <>
+    <div style={{ position: 'relative', ...style }}>
       {/* Not display:none — Safari won't decode a display:none video (canvas stays
           blank). Render it tiny + transparent so frames keep flowing to the texture. */}
       <video ref={vRef[0]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
       <video ref={vRef[1]} muted playsInline preload="auto" style={HIDDEN_VIDEO} />
-      <canvas ref={canvasRef} style={style} />
-      {/* Pose overlay — same rect as the GL canvas; drawn by the GL draw loop. */}
-      <canvas
-        ref={overlayRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-      />
-    </>
+      <canvas ref={shadowRef} style={FILL} />
+      <canvas ref={canvasRef} style={FILL} />
+      <canvas ref={overlayRef} style={{ ...FILL, pointerEvents: 'none' }} />
+    </div>
   )
 }

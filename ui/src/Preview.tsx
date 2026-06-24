@@ -16,6 +16,21 @@ const pretty = (name: string) => name.replace(/^monet-/, '').replace(/-/g, ' ')
 
 const THUMB = 64 // filmstrip thumbnail size (px)
 const GAP = 8
+
+// Pill toggle style (top-right controls): filled blue when on, faint when off.
+const pill = (on: boolean) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  border: 0,
+  cursor: 'pointer',
+  borderRadius: 999,
+  padding: '6px 12px',
+  font: '12px ui-monospace, monospace',
+  background: on ? '#1d9bf0' : '#ffffffcc',
+  color: on ? '#fff' : '#6b5f54',
+  boxShadow: '0 1px 4px rgba(40,30,20,0.18)',
+}) as const
 const DEFAULT_ANCHOR: [number, number] = [0.5, 0.87]
 
 // Deterministic test mode (for screenshot tests). `?test=1` freezes the stage on a
@@ -40,6 +55,7 @@ export default function Preview() {
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
   const [overlay, setOverlay] = useState(true) // "x-ray vision" — pose overlay, on by default
+  const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
   const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data
   const [barH, setBarH] = useState(132) // filmstrip bar height (stage sits above it)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -222,6 +238,7 @@ export default function Preview() {
             zoom={zoom}
             pose={pose}
             showOverlay={overlay}
+            showShadow={shadow}
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
             blendMs={300}
@@ -260,31 +277,19 @@ export default function Preview() {
           </div>
         )}
 
-        {/* X-ray vision toggle — pose / com / face overlay (on by default). */}
-        <button
+        {/* Top-right toggles: contact shadow + x-ray pose overlay (both on by default). */}
+        <div
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setOverlay((v) => !v)}
-          title="toggle pose overlay (x-ray)"
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 14,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            border: 0,
-            cursor: 'pointer',
-            borderRadius: 999,
-            padding: '6px 12px',
-            font: '12px ui-monospace, monospace',
-            background: overlay ? '#1d9bf0' : '#ffffffcc',
-            color: overlay ? '#fff' : '#6b5f54',
-            boxShadow: '0 1px 4px rgba(40,30,20,0.18)',
-          }}
+          style={{ position: 'absolute', top: 12, right: 14, display: 'flex', gap: 8 }}
         >
-          {overlay ? '◉' : '○'} x-ray
-          {overlay && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
-        </button>
+          <button onClick={() => setShadow((v) => !v)} title="toggle contact shadow" style={pill(shadow)}>
+            {shadow ? '◉' : '○'} shadow
+          </button>
+          <button onClick={() => setOverlay((v) => !v)} title="toggle pose overlay (x-ray)" style={pill(overlay)}>
+            {overlay ? '◉' : '○'} x-ray
+            {overlay && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+          </button>
+        </div>
 
         {/* Zoom control */}
         <div
