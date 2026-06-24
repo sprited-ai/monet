@@ -70,6 +70,33 @@ Models (all already on gin except the first, which this experiment downloaded �
 
 ---
 
+## Upscale / deblur (Jin: "뛰는 애니메이션이 블러리")
+
+The fast-motion (walk/run) frames read soft. Diagnosis from `out/run_sequence_orig.png`:
+the run frames are **fairly sharp individually** — the softness is mostly **640-res
+spatial softness + temporal judder at 16 fps**, not heavy baked-in motion blur.
+
+So the fix is layered (a single per-frame upscaler is *not* the whole answer):
+
+| layer | tool | status | what it fixes |
+|---|---|---|---|
+| spatial | `RealESRGAN_x4plus_anime_6B` (on gin) | ✅ done | low-res line/edge softness |
+| temporal | RIFE/FILM VFI (nodes on gin) | ⚠ ckpt not downloaded (GitHub blocked; pull from HF) | judder on fast motion |
+| restore | **SeedVR2** (not installed) | proposed | true temporal deblur+upscale, the dedicated "fix the blur" model |
+| root cause | regen w/o 6-step distill LoRA | ⏳ E1b running | distill LoRAs smear fast motion — may remove blur at the source |
+
+**E1a — anime upscale (done).** `upscale_scail2.py`: RealESRGAN anime 4× → lanczos to
+1280, 32 s on gin. `out/scail2_monet_e1_up_00001.mp4`. Compare on a run frame:
+`out/upscale_compare_run_frame.png` (left 640 nearest, right 1280) — clearly crisper
+hair/eyes/floral. This frame was low-res, not motion-blurred, so it cleaned up well.
+**Honest caveat:** where a frame is genuinely motion-smeared, ESRGAN upscales the smear;
+it can't reconstruct it. That's what SeedVR2 / the root-cause regen are for.
+
+```bash
+python3 upscale_scail2.py --video scail2_monet_e1_00001.mp4 --target 1280 --prefix scail2_monet_e1_up
+python3 rife_scail2.py    --video scail2_monet_e1_up_00001.mp4 --mult 2 --in_fps 16   # needs a RIFE ckpt
+```
+
 ## The experiment menu (what's possible with gin + ComfyUI)
 
 Ranked. E1 done; the rest reuse the same runner / environment.
