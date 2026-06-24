@@ -498,7 +498,9 @@ export default function Stage({
     // shader erase (applied straight onto the texture) exposes as a desynced mouth. Driving
     // the upload off rVFC removes the race. Fallback (no rVFC): upload in the rAF loop.
     const presented: [number, number] = [0, 0]
-    const hasRVFC = 'requestVideoFrameCallback' in a
+    // typeof, not `'…' in a`: the `in`-operator's false branch narrows `a` to `never`
+    // (rVFC is a known HTMLVideoElement member), poisoning the `if (!hasRVFC)` fallback.
+    const hasRVFC = typeof a.requestVideoFrameCallback === 'function'
     let vfcCancelled = false
     // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
     // capture after the buffer is composited+cleared, blanking the canvas. Keeping
