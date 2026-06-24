@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Generate per-clip sidecars (pose.json + s3body.json) for Monet clips — anywhere
-# (Mac or gin). Runs whichever pipeline THIS machine has; the other is skipped with a
-# note. NON-DESTRUCTIVE: every step skips clips whose output already exists, so nothing
-# is overwritten (set FORCE=1 to regenerate s3body.json). Disk/speed/transfer are the
-# operator's concern — this just processes clips in $CONTENTS and writes sidecars there.
+# Generate per-clip derivatives (pose.json + face.json + s3body.json) for Monet clips —
+# anywhere (Mac or gin). Runs whichever pipeline THIS machine has; missing ones are
+# skipped with a note. NON-DESTRUCTIVE: every step skips clips whose output already
+# exists, so nothing is overwritten (set FORCE=1 to regenerate s3body.json). Disk/speed/
+# transfer are the operator's concern — this just processes clips in $CONTENTS and writes
+# derivatives there.
 #
 # Override any path via env:
-#   CONTENTS                 clip dir = sidecar output dir   (default <repo>/contents/monet)
+#   CONTENTS                 clip dir = derivative output dir   (default <repo>/contents/monet)
 #   BIZARRE_DIR / BIZARRE_PY  bizarre estimator dir + its python
+#   FACE_DIR / FACE_PY        anime-face-detector dir + its python
 #   SAM_DIR / SAM_PY          SAM-3D-Body dir + its python
 #   NPZ_DIR                  where SAM rig NPZs land          (default <repo>/experiments/sam3d-body/out)
 #   FORCE=1                  regenerate s3body.json even if present
 #
-# See docs/017-clip-sidecar-pipeline.md.
+# See docs/017-clip-derivatives-pipeline.md.
 set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,6 +22,8 @@ REPO="$(cd "$here/.." && pwd)"
 CONTENTS="${CONTENTS:-$REPO/contents/monet}"
 BIZARRE_DIR="${BIZARRE_DIR:-$REPO/experiments/bizarre-pose-estimator}"
 BIZARRE_PY="${BIZARRE_PY:-$REPO/scripts/.venv/bin/python}"
+FACE_DIR="${FACE_DIR:-$REPO/experiments/anime-face-detector}"
+FACE_PY="${FACE_PY:-$FACE_DIR/.venv/bin/python}"
 SAM_DIR="${SAM_DIR:-$HOME/dev/sam-3d-body}"
 SAM_PY="${SAM_PY:-$SAM_DIR/.venv/bin/python}"
 NPZ_DIR="${NPZ_DIR:-$REPO/experiments/sam3d-body/out}"
@@ -42,6 +46,21 @@ if [ -x "$BIZARRE_PY" ] && [ -f "$BIZARRE_DIR/_scripts/pose_data.py" ] && [ -f "
   fi
 else
   echo "● [pose.json]  SKIP — bizarre env not here (py:$( [ -x "$BIZARRE_PY" ] && echo ok || echo missing ), ckpt:$( [ -f "$biz_ckpt" ] && echo ok || echo missing ))"
+fi
+
+# ── face.json — anime-face-detector 28-kp landmarks (CPU) ──────────────────
+# CPU-only stack (OpenMMLab 1.x; mmcv ops won't build on gin's Blackwell/cu128, so
+# this runs CPU everywhere). ~1.2 s/frame single-process. For a big first batch, split
+# the file list across N processes by hand — see docs/017.
+if [ -x "$FACE_PY" ] && [ -f "$FACE_DIR/face_data.py" ]; then
+  echo "● [face.json]  anime-face-detector → $CONTENTS  (skips existing)"
+  if ( cd "$FACE_DIR" && "$FACE_PY" face_data.py "$CONTENTS" --glob "$CONTENTS/*.mp4" ); then
+    echo "  ✓ face.json done"
+  else
+    echo "  ✗ face.json FAILED"
+  fi
+else
+  echo "● [face.json]  SKIP — anime-face-detector env not here (py:$( [ -x "$FACE_PY" ] && echo ok || echo missing ))"
 fi
 
 # ── s3body.json — SAM-3D-Body (GPU; falls back to slow CPU) ────────────────

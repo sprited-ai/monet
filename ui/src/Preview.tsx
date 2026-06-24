@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
-import type { PoseDoc, SamDoc, MouthMode } from './Stage'
+import type { PoseDoc, SamDoc, FaceDoc, MouthMode } from './Stage'
 import type { Mouth } from './scene/types'
 
 // Apple Photos-style stage: a big player up top, and a horizontal filmstrip of
@@ -55,10 +55,11 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
-  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('sam') // x-ray: A=SAM, B=bizarre
+  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre' | 'face'>('sam') // x-ray: A=SAM, B=bizarre, C=face
   const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
   const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data (bizarre)
   const [s3body, setS3body] = useState<SamDoc | null>(null) // current clip's SAM-3D-Body rig
+  const [face, setFace] = useState<FaceDoc | null>(null) // current clip's anime-face-detector rig
   const [mouth, setMouth] = useState<Mouth | null>(null) // current clip's SAM3 mouth track
   const [mouthMode, setMouthMode] = useState<MouthMode>('contour') // contour → erase → off
   const [scrub, setScrub] = useState<number | null>(null) // null = autoplay; a frame index pins it
@@ -222,6 +223,7 @@ export default function Preview() {
     let cancelled = false
     setPose(null)
     setS3body(null)
+    setFace(null)
     setMouth(null)
     setScrub(null) // new clip → back to autoplay
     fetch(`/contents/${current.key.replace(/\.mp4$/, '.pose.json')}`)
@@ -232,6 +234,10 @@ export default function Preview() {
       .then((r) => (r.ok ? (r.json() as Promise<SamDoc>) : null))
       .then((d) => !cancelled && setS3body(d))
       .catch(() => !cancelled && setS3body(null))
+    fetch(`/contents/${current.key.replace(/\.mp4$/, '.face.json')}`)
+      .then((r) => (r.ok ? (r.json() as Promise<FaceDoc>) : null))
+      .then((d) => !cancelled && setFace(d))
+      .catch(() => !cancelled && setFace(null))
     fetch(`/contents/${current.key.replace(/\.mp4$/, '.mouth.json')}`)
       .then((r) => (r.ok ? (r.json() as Promise<Mouth>) : null))
       .then((d) => !cancelled && setMouth(d))
@@ -299,13 +305,14 @@ export default function Preview() {
             zoom={zoom}
             pose={pose}
             s3body={s3body}
+            face={face}
             mouth={mouth}
             mouthMode={mouthMode}
             fps={clipFps}
             scrub={scrub}
             onFrame={onFrame}
             showOverlay={overlay !== 'off'}
-            overlaySource={overlay === 'sam' ? 'sam' : 'bizarre'}
+            overlaySource={overlay === 'sam' ? 'sam' : overlay === 'face' ? 'face' : 'bizarre'}
             showShadow={shadow}
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
@@ -359,13 +366,20 @@ export default function Preview() {
             {shadow ? '◉' : '○'} shadow
           </button>
           <button
-            onClick={() => setOverlay((v) => (v === 'sam' ? 'bizarre' : v === 'bizarre' ? 'off' : 'sam'))}
-            title="x-ray: A (SAM rig) → B (bizarre) → off"
+            onClick={() => setOverlay((v) => (v === 'sam' ? 'bizarre' : v === 'bizarre' ? 'face' : v === 'face' ? 'off' : 'sam'))}
+            title="x-ray: A (SAM rig) → B (bizarre) → C (face) → off"
             style={pill(overlay !== 'off')}
           >
-            {overlay === 'off' ? '○ x-ray' : overlay === 'sam' ? '◉ x-ray A · SAM' : '◉ x-ray B · bizarre'}
+            {overlay === 'off'
+              ? '○ x-ray'
+              : overlay === 'sam'
+                ? '◉ x-ray A · SAM'
+                : overlay === 'bizarre'
+                  ? '◉ x-ray B · bizarre'
+                  : '◉ x-ray C · face'}
             {overlay === 'sam' && !s3body && current && <span style={{ opacity: 0.8 }}>· no data</span>}
             {overlay === 'bizarre' && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+            {overlay === 'face' && !face && current && <span style={{ opacity: 0.8 }}>· no data</span>}
           </button>
           <button
             onClick={() => setMouthMode((m) => (m === 'contour' ? 'erase' : m === 'erase' ? 'off' : 'contour'))}

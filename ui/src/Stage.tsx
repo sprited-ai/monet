@@ -273,6 +273,74 @@ function drawSamOverlay(
   }
 }
 
+// anime-face-detector 28-point landmark rig (one clip's <clip>.face.json). The
+// index map (derived empirically on the Monet sprite — upstream doesn't publish it,
+// labelled in image space) → grouped polylines so the face reads as a face:
+//   0-4 contour · 5-7/8-10 eyebrows · 11-16/17-22 eyes · 23 nose · 24-27 mouth
+const FACE_GROUPS: { name: string; edges: [number, number][]; color: string; lblAt: number }[] = [
+  { name: 'jaw', color: '#ffffff', lblAt: 2, edges: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+  { name: 'browL', color: '#ffb14e', lblAt: 6, edges: [[5, 6], [6, 7]] },
+  { name: 'browR', color: '#ffb14e', lblAt: 9, edges: [[8, 9], [9, 10]] },
+  // eyes: top lid (a-b-c) + bottom lid (d-e-f), closed at the corners → almond
+  { name: 'eyeL', color: '#35e0ff', lblAt: 12, edges: [[11, 12], [12, 13], [13, 16], [16, 15], [15, 14], [14, 11]] },
+  { name: 'eyeR', color: '#35e0ff', lblAt: 18, edges: [[17, 18], [18, 19], [19, 22], [22, 21], [21, 20], [20, 17]] },
+  { name: 'mouth', color: '#ff46aa', lblAt: 25, edges: [[24, 25], [25, 26], [26, 27], [27, 24]] },
+]
+
+// Draw the anime-face rig: grouped colored edges + keypoint dots + the nose marker +
+// a short label per group. `kp` = 28 normalized [x,y,conf]; points below `KP_MIN`
+// confidence are dimmed (drawn orange) but still plotted.
+function drawFaceOverlay(
+  ctx: CanvasRenderingContext2D,
+  kp: [number, number, number][],
+  project: (ux: number, uy: number) => [number, number],
+  labels = true,
+) {
+  const KP_MIN = 0.2
+  ctx.lineWidth = 2.5
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const g of FACE_GROUPS) {
+    ctx.strokeStyle = g.color
+    for (const [a, b] of g.edges) {
+      const pa = kp[a], pb = kp[b]
+      if (!pa || !pb) continue
+      const A = project(pa[0], pa[1]), B = project(pb[0], pb[1])
+      ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke()
+    }
+  }
+  // keypoint dots — low confidence drawn orange, like the bizarre overlay
+  for (let i = 0; i < kp.length; i++) {
+    const k = kp[i]
+    if (!k) continue
+    const P = project(k[0], k[1])
+    ctx.fillStyle = k[2] < KP_MIN ? 'rgba(255,165,0,0.95)' : 'rgba(255,255,255,0.92)'
+    ctx.beginPath(); ctx.arc(P[0], P[1], 2.6, 0, 7); ctx.fill()
+  }
+  // nose (idx 23): a small yellow ring so it doesn't read as just another dot
+  if (kp[23]) {
+    const N = project(kp[23][0], kp[23][1])
+    ctx.strokeStyle = '#ffe14e'; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(N[0], N[1], 4, 0, 7); ctx.stroke()
+  }
+  if (labels) {
+    ctx.font = '11px ui-monospace, monospace'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 3
+    const lbl = (t: string, x: number, y: number) => {
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(t, x + 4, y)
+      ctx.fillStyle = 'rgba(255,255,255,0.96)'; ctx.fillText(t, x + 4, y)
+    }
+    for (const g of FACE_GROUPS) {
+      const k = kp[g.lblAt]
+      if (!k) continue
+      const P = project(k[0], k[1])
+      lbl(g.name, P[0], P[1])
+    }
+    if (kp[23]) { const N = project(kp[23][0], kp[23][1]); lbl('nose', N[0], N[1]) }
+  }
+}
+
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
 // it stays blank. Keep the source element in the render tree but tiny + transparent.
 const HIDDEN_VIDEO: CSSProperties = {
@@ -308,6 +376,15 @@ export type SamDoc = {
   kp: ([number, number][] | null)[] // per frame: 70 [x,y] (or null on a failed frame)
 }
 
+// anime-face-detector rig (one clip's <clip>.face.json): 28 landmarks/frame,
+// normalized 0..1 to the color frame. Per frame is the single highest-score face,
+// or null on a frame with no detection. See experiments/anime-face-detector.
+export type FaceDoc = {
+  fps: number
+  frames: number
+  faces: ({ bbox: [number, number, number, number]; score: number; kp: [number, number, number][] } | null)[]
+}
+
 type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
@@ -317,10 +394,11 @@ type Props = {
   zoom?: number // global user zoom multiplier
   pose?: PoseDoc | null // this clip's pose data, for the optional overlay
   s3body?: SamDoc | null // this clip's SAM-3D-Body 70-kp rig (contents/<clip>.s3body.json)
+  face?: FaceDoc | null // this clip's anime-face-detector 28-kp rig (contents/<clip>.face.json)
   mouth?: Mouth | null // this clip's SAM3 mouth track (contents/<clip>.mouth.json)
   mouthMode?: MouthMode // 'contour' = polygon overlay, 'erase' = shader flat-fill, 'off' = neither
   showOverlay?: boolean // draw the x-ray overlay
-  overlaySource?: 'bizarre' | 'sam' // x-ray B = bizarre (com/face/kp), x-ray A = SAM rig
+  overlaySource?: 'bizarre' | 'sam' | 'face' // x-ray B = bizarre, A = SAM rig, C = face landmarks
   showShadow?: boolean // draw a soft contact shadow under her feet (tracks com x)
   fps?: number // clip fps, for the frame scrubber (default 24)
   scrub?: number | null // pin to this frame (pauses); null = autoplay
@@ -345,6 +423,7 @@ export default function Stage({
   zoom = 1,
   pose = null,
   s3body = null,
+  face = null,
   mouth = null,
   mouthMode = 'off',
   showOverlay = false,
@@ -385,6 +464,9 @@ export default function Stage({
   const slotS3body = useRef<[SamDoc | null, SamDoc | null]>([s3body, s3body]) // per-slot SAM rig
   const s3bodyRef = useRef(s3body) // latest s3body prop, assigned to a slot on load
   s3bodyRef.current = s3body
+  const slotFace = useRef<[FaceDoc | null, FaceDoc | null]>([face, face]) // per-slot face rig
+  const faceRef = useRef(face) // latest face prop, assigned to a slot on load
+  faceRef.current = face
   const polyBuf = useRef(new Float32Array(32)) // scratch: 16 vec2 uploaded for shader erase
   const lastLoaded = useRef(0) // slot the most recent clip loaded into (pose fetch lands here)
   // Temporal smoothing state for the com/face markers (dt-based EMA in the draw loop).
@@ -662,6 +744,14 @@ export default function Stage({
               const skp = sdoc.kp[si]
               if (skp) drawSamOverlay(octx, skp, project)
             }
+          } else if (cur.current.overlaySource === 'face') {
+            // x-ray C: the anime-face-detector 28-point rig, frame-indexed like pose.
+            const fdoc = slotFace.current[slot]
+            if (fdoc && fdoc.faces.length && av.duration > 0) {
+              const fi = Math.max(0, Math.min(fdoc.faces.length - 1, Math.floor(av.currentTime * (fdoc.fps || 24))))
+              const ff = fdoc.faces[fi]
+              if (ff) drawFaceOverlay(octx, ff.kp, project)
+            }
           } else if (fr) {
             drawOverlay(octx, fr, project, cssW, cssH) // x-ray B: bizarre com/face/kp
           }
@@ -718,6 +808,7 @@ export default function Stage({
       slotPose.current[0] = poseRef.current
       slotMouth.current[0] = mouthRef.current
       slotS3body.current[0] = s3bodyRef.current
+      slotFace.current[0] = faceRef.current
       lastLoaded.current = 0
       const v = vRef[0].current!
       v.src = src
@@ -732,6 +823,7 @@ export default function Stage({
     slotPose.current[incoming] = poseRef.current
     slotMouth.current[incoming] = mouthRef.current
     slotS3body.current[incoming] = s3bodyRef.current
+    slotFace.current[incoming] = faceRef.current
     lastLoaded.current = incoming
     const v = vRef[incoming].current!
     v.src = src
@@ -757,6 +849,11 @@ export default function Stage({
   useEffect(() => {
     slotS3body.current[lastLoaded.current] = s3body
   }, [s3body])
+
+  // Face rig JSON arrives async too — same late-assignment.
+  useEffect(() => {
+    slotFace.current[lastLoaded.current] = face
+  }, [face])
 
   // Frame scrubber: a number pins/pauses the active video to that frame; null resumes
   // autoplay. The draw loop keeps uploading the (paused) frame, so the contour holds too.

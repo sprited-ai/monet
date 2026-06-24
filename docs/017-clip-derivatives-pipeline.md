@@ -1,43 +1,45 @@
-# 017 — Clip sidecar data pipeline
+# 017 — Clip derivative data pipeline
 
 How to (re)generate the per-frame data that rides alongside each Monet clip. Every
 `contents/monet/<clip>.mp4` (stacked-alpha: color top / alpha-as-luma bottom) has
-**sidecar JSON** the renderer fetches:
+**derivative JSON** the renderer fetches:
 
-| sidecar | from | drives | where it runs |
+| derivative | from | drives | where it runs |
 |---|---|---|---|
 | `<clip>.pose.json` | **bizarre-pose-estimator** (2D) | contact-shadow x (`com`), camera zoom (`face`), x-ray **B** | local CPU |
+| `<clip>.face.json` | **anime-face-detector** (28-kp) | x-ray **C** (face landmarks); future gaze/blink/expression | local CPU |
 | `<clip>.s3body.json` | **SAM-3D-Body** (3D rig) | x-ray **A** (70-kp rig + hands); future chibi retarget | **gin** GPU → local |
 | `<clip>.mouth.json` | SAM3 mouth track | shader mouth-erase / contour | separate track (not covered here) |
 
-All sidecar coords are normalized 0..1 to the **color (top-half) frame**, so they map
+All derivative coords are normalized 0..1 to the **color (top-half) frame**, so they map
 straight onto the sprite via the same inverse-shader transform in the UI.
 
 Both generators are **resume-friendly + non-destructive**: re-running only creates
-sidecars that don't exist yet — nothing is overwritten. So the standard flow is:
+derivatives that don't exist yet — nothing is overwritten. So the standard flow is:
 **drop new `.mp4`s in `contents/monet/`, run one command, commit.**
 
 ## One command (anywhere)
 
 ```bash
-./scripts/gen-sidecars.sh
+./scripts/gen-derivatives.sh
 ```
 
 Generic — runs on Mac or gin, doing whichever pipeline THIS machine has set up; the
-other is skipped with a note. Writes sidecars next to the clips in `$CONTENTS`, skipping
+other is skipped with a note. Writes derivatives next to the clips in `$CONTENTS`, skipping
 any that already exist (`FORCE=1` to regenerate `s3body.json`). Every path is env-
 overridable so you can point it anywhere:
 
 ```bash
 CONTENTS=/path/to/clips \
-BIZARRE_DIR=… BIZARRE_PY=…  SAM_DIR=… SAM_PY=…  NPZ_DIR=… \
-./scripts/gen-sidecars.sh
+BIZARRE_DIR=… BIZARRE_PY=…  FACE_DIR=… FACE_PY=…  SAM_DIR=… SAM_PY=…  NPZ_DIR=… \
+./scripts/gen-derivatives.sh
 ```
 
-- On **Mac**: runs bizarre (`pose.json`); skips SAM unless its env is present.
-- On **gin**: runs SAM (`s3body.json`); skips bizarre unless its env is present.
+- On **Mac**: runs bizarre (`pose.json`) + anime-face-detector (`face.json`); skips SAM
+  unless its env is present.
+- On **gin**: runs SAM (`s3body.json`); skips the CPU stacks unless their env is present.
 - Disk / speed / cross-machine transfer are intentionally **out of scope** — the script
-  just processes clips in `$CONTENTS` on the machine it runs on. Sections 1–2 below are
+  just processes clips in `$CONTENTS` on the machine it runs on. Sections 1–3 below are
   what it runs under the hood (and how to run each by hand).
 
 ---
@@ -61,7 +63,37 @@ TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 ../../scripts/.venv/bin/python -m _scripts.po
 - Schema: per frame `{ bbox, com, face, kp:[[x,y,score]…] }`. `com`/`face` are
   mask-derived (robust); raw keypoints are noisy on the chibi.
 
-## 2. SAM-3D-Body → `s3body.json` (gin GPU, 4 steps)
+## 2. anime-face-detector → `face.json` (local, CPU)
+
+Env: `experiments/anime-face-detector/.venv` — the fiddly OpenMMLab **1.x** stack
+(mmcv-full 1.7.0 + torch 2.0.1, all CPU ops). Full reproduce recipe + why it's CPU-only
+in `experiments/anime-face-detector/README.md`.
+
+```bash
+cd experiments/anime-face-detector
+.venv/bin/python face_data.py ../../contents/monet --glob '../../contents/monet/*.mp4'
+```
+
+- Writes `contents/monet/<clip>.face.json` (skips ones that exist).
+- **CPU-only — gin is no faster.** mmcv 1.x's custom ops pin torch ≤ 2.0, but gin's
+  Blackwell GPU needs cu128 / torch ≥ 2.7, so the CUDA ops can't build there; it runs
+  CPU everywhere. (~1.2 s/frame.) For a big first batch, split the file list across N
+  processes (each loads its own model) and cap threads so they don't oversubscribe:
+
+  ```bash
+  for w in 0 1 2 3; do
+    FACE_THREADS=2 .venv/bin/python face_data.py ../../contents/monet \
+      $(ls ../../contents/monet/*.mp4 | awk "NR%4==$w") &
+  done; wait
+  ```
+
+- Per frame we keep the single highest-score face (Monet is one character), or `null`
+  if nothing scored above threshold. Schema: `{ bbox:[x,y,w,h], score, kp:[[x,y,conf]*28] }`.
+- 28-point index map (contour / eyebrows / eyes / nose / mouth) is in the `face_data.py`
+  header + `keypoint_groups` in every JSON — derived empirically on the sprite, since
+  upstream doesn't publish it.
+
+## 3. SAM-3D-Body → `s3body.json` (gin GPU, 4 steps)
 
 The heavy rig (`experiments/sam3d-body/out/<clip>.npz`) is the source of truth; the
 slim browser JSON is exported from it. gin env at `~/dev/sam-3d-body` (uv venv, torch
@@ -93,18 +125,18 @@ scripts/.venv/bin/python experiments/sam3d-body/export_s3body_json.py
   per-frame bbox** — that's why it fits every frame (valid 121/121).
 - Full NPZ schema + the 70-keypoint index map: `experiments/sam3d-body/README.md`.
 
-## 3. Commit
+## 4. Commit
 
 ```bash
-git add contents/monet/*.pose.json contents/monet/*.s3body.json
-git commit -m "contents: sidecars for <new clips>"
+git add contents/monet/*.pose.json contents/monet/*.face.json contents/monet/*.s3body.json
+git commit -m "contents: derivatives for <new clips>"
 git push
 ```
 
-Committed: the `.mp4`, `.pose.json`, `.s3body.json` (browser-facing). **Not** committed:
+Committed: the `.mp4`, `.pose.json`, `.face.json`, `.s3body.json` (browser-facing). **Not** committed:
 `experiments/sam3d-body/out/*.npz` (~0.85 MB/clip, gitignored — regenerable on gin and
 synced there). Prod serves `contents/` from R2; `npm run sync:contents` pushes new
-sidecars to the bucket so the deployed `/preview` sees them.
+derivatives to the bucket so the deployed `/preview` sees them.
 
 ## Gotchas (learned the hard way)
 
