@@ -185,7 +185,7 @@ export default function Whiteroom() {
   // hold the talk loop until the audio (or the muted read-timer) ends. Shared by a
   // reply (send) and the unprompted welcome-back greeting.
   const speakReply = useCallback(
-    (reply: { text: string; emotion: Emotion }) => {
+    (reply: { text: string; emotion: Emotion }, opts?: { silent?: boolean }) => {
       const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
       talkClip.current = talk
       speaking.current = true
@@ -197,7 +197,11 @@ export default function Whiteroom() {
         const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
         speakTimer.current = window.setTimeout(endSpeaking, capMs)
       }
-      if (mutedRef.current) {
+      // `silent`: caption-only, no voice attempt. Used by the welcome-back greeting,
+      // which fires on load BEFORE any user gesture — audio autoplay is blocked there,
+      // so speak()'s AudioContext.resume() would hang and the (onStart-gated) caption
+      // would never appear. Caption-only guarantees the greeting always shows.
+      if (opts?.silent || mutedRef.current) {
         setCaption(reply.text) // no voice → show the line right away
         holdMuted()
       } else {
@@ -308,23 +312,18 @@ export default function Whiteroom() {
       indexed.current = idx.items ?? {}
       play('monet-greet-1') // her first breath in the room
       // Welcome-back: once she's awake, if she remembers this person she says a short
-      // line referencing them — the memory moat, made felt (docs/015). Once per tab
-      // session; ambient, so empty/error → silence (the flag is set only on a real
-      // greeting, which also keeps React StrictMode's double-mount from double-greeting).
-      try {
-        if (!sessionStorage.getItem('monet.greeted')) {
-          fetch('/api/greeting', { headers: { 'x-monet-uid': getUid() } })
-            .then((x) => x.json())
-            .then((g) => {
-              if (cancelled || !g?.text) return
-              sessionStorage.setItem('monet.greeted', '1')
-              speakReply({ text: g.text, emotion: (g.emotion || 'calm') as Emotion })
-            })
-            .catch(() => {})
-        }
-      } catch {
-        /* sessionStorage blocked (private mode) — skip the greeting */
-      }
+      // line referencing them — the memory moat, made felt (docs/015). Greets on every
+      // arrival (each page load is an entry); the line varies, so it doesn't feel rote.
+      // Caption-only (silent): the greeting precedes any user gesture, so audio can't
+      // autoplay yet. Ambient — empty/error degrades to silence, never a ⚠. The
+      // `cancelled` guard keeps React StrictMode's double-mount from double-greeting.
+      fetch('/api/greeting', { headers: { 'x-monet-uid': getUid() } })
+        .then((x) => x.json())
+        .then((g) => {
+          if (cancelled || !g?.text) return
+          speakReply({ text: g.text, emotion: (g.emotion || 'calm') as Emotion }, { silent: true })
+        })
+        .catch(() => {})
     })
     return () => {
       cancelled = true
@@ -414,27 +413,41 @@ export default function Whiteroom() {
       {/* hidden home for the sprite's <video> slots (kept in-tree so Safari decodes) */}
       <div ref={videoBoxRef} aria-hidden style={{ position: 'fixed', width: 0, height: 0, overflow: 'hidden' }} />
 
-      {/* Caption — diegetic subtitle for what she says; fades with the words. */}
+      {/* Caption — a movie/video subtitle (YouTube/Netflix feel): white text on a soft
+          dark scrim that hugs each line (box-decoration-break: clone), so it's crisply
+          legible over the light void OR her sprite. The outer div positions + fades it. */}
       <div
         style={{
           position: 'fixed',
           left: 0,
           right: 0,
-          bottom: '13vh',
+          bottom: '11vh',
           textAlign: 'center',
-          padding: '0 8vw',
+          padding: '0 6vw',
           pointerEvents: 'none',
-          color: 'rgba(86,60,48,0.96)',
-          fontSize: 'clamp(16px, 2.5vh, 25px)',
-          fontWeight: 500,
-          lineHeight: 1.45,
-          textShadow: '0 1px 12px rgba(255,255,255,0.8)',
           opacity: caption ? 1 : 0,
-          transform: caption ? 'translateY(0)' : 'translateY(7px)',
-          transition: 'opacity .28s ease, transform .28s ease',
+          transform: caption ? 'translateY(0)' : 'translateY(6px)',
+          transition: 'opacity .25s ease, transform .25s ease',
         }}
       >
-        {caption}
+        <span
+          style={{
+            background: 'rgba(0,0,0,0.62)',
+            color: 'rgba(255,255,255,0.98)',
+            padding: '0.2em 0.5em',
+            borderRadius: 7,
+            fontFamily: 'system-ui, "Helvetica Neue", Arial, sans-serif',
+            fontSize: 'clamp(17px, 2.7vh, 27px)',
+            fontWeight: 600,
+            lineHeight: 1.6,
+            letterSpacing: '0.005em',
+            textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+            WebkitBoxDecorationBreak: 'clone',
+            boxDecorationBreak: 'clone',
+          }}
+        >
+          {caption}
+        </span>
       </div>
 
       {/* The type box — faint at rest so the room shows through, bright on focus.
