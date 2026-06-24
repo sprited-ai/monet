@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
+import type { Mouth } from './scene/types'
+
+// Mouth debug mode: show the SAM3 polygon as a contour, flat-fill (erase) it, or off.
+export type MouthMode = 'contour' | 'erase' | 'off'
 
 // Monet's stage: a stacked-alpha player with a TWO-texture shader so clip
 // transitions cross-dissolve *in the shader* (rgb AND alpha mixed) over a few
@@ -16,6 +20,23 @@ const FS = `precision mediump float;varying vec2 uv;
 uniform sampler2D tA;uniform sampler2D tB;uniform float mixv;uniform float fw;uniform float zoom;
 uniform vec2 ancA;uniform float sclA;uniform vec2 ancB;uniform float sclB;uniform vec2 base;uniform float aspect;
 uniform float fasA;uniform float fasB; // per-slot frame aspect (frameW/frameH)
+// MOUTH ERASE ('erase' mode): the active clip's per-frame 16-gon (u-space) + skin.
+// uHasMouth gates it; uMargin dilates+feathers analytically (crisp under zoom).
+uniform vec2 uMouth[16];uniform vec3 uSkin;uniform vec4 uBox;uniform float uHasMouth;uniform float uMargin;
+// Signed distance to the 16-gon (IQ). Prev-vertex tracked (vj) to avoid non-loop
+// array indexing, which GLSL ES 1.00 (WebGL1) disallows.
+float sdPoly(vec2 p, vec2 v[16]){
+  float d=dot(p-v[0],p-v[0]); float s=1.0; vec2 vj=v[15];
+  for(int i=0;i<16;i++){
+    vec2 vi=v[i]; vec2 e=vj-vi; vec2 w=p-vi;
+    vec2 b=w-e*clamp(dot(w,e)/dot(e,e),0.0,1.0);
+    d=min(d,dot(b,b));
+    bvec3 c=bvec3(p.y>=vi.y, p.y<vj.y, e.x*w.y>e.y*w.x);
+    if(all(c)||all(not(c))) s=-s;
+    vj=vi;
+  }
+  return s*sqrt(d);
+}
 // anc = where the feet are in THIS clip's frame (per framing). base = the fixed
 // screen point the feet sit at, same for every clip. The canvas matches the
 // viewport rect (not the square frame); aspect = canvasW/canvasH keeps texels
@@ -30,6 +51,10 @@ vec4 stk(sampler2D t,vec2 anc,float scl,float fas){
   vec2 u=vec2(anc.x+(uv.x-0.5)*aspect/(k*fas), anc.y+(uv.y-base.y)/k);
   if(u.x<0.0||u.x>1.0||u.y<0.0||u.y>1.0) return vec4(0.0);
   vec3 rgb=texture2D(t,vec2(u.x,u.y*0.5)).rgb;
+  if(uHasMouth>0.5 && u.x>uBox.x-uMargin && u.x<uBox.z+uMargin && u.y>uBox.y-uMargin && u.y<uBox.w+uMargin){
+    float cover=1.0-smoothstep(uMargin-0.004,uMargin+0.004,sdPoly(u,uMouth));
+    rgb=mix(rgb,uSkin,cover);
+  }
   float a=texture2D(t,vec2(u.x,0.5+u.y*0.5)).r;
   // Feather on the VIDEO RECT (frame coords u), not the render box — content near
   // the clip's own frame border softens. A property of the video, so it follows
@@ -100,6 +125,34 @@ function drawOverlay(
   void w
 }
 
+// Draw the SAM3 mouth polygon as a contour overlay (an "x-ray" for the mouth track) —
+// the raw 16-gon, projected from u-space to screen with the same inverse-shader
+// transform as the pose overlay. Lets us verify the tracking before trusting the erase.
+function drawMouthContour(
+  ctx: CanvasRenderingContext2D,
+  poly: [number, number][],
+  project: (ux: number, uy: number) => [number, number],
+) {
+  if (poly.length < 2) return
+  ctx.lineWidth = 2
+  ctx.strokeStyle = 'rgba(255,70,170,0.95)'
+  ctx.beginPath()
+  poly.forEach(([ux, uy], i) => {
+    const [sx, sy] = project(ux, uy)
+    if (i === 0) ctx.moveTo(sx, sy)
+    else ctx.lineTo(sx, sy)
+  })
+  ctx.closePath()
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(255,70,170,0.95)'
+  for (const [ux, uy] of poly) {
+    const [sx, sy] = project(ux, uy)
+    ctx.beginPath()
+    ctx.arc(sx, sy, 2.5, 0, 7)
+    ctx.fill()
+  }
+}
+
 // Soft contact-shadow ellipse drawn BEHIND the character (a layer under the GL
 // canvas). Centered under her feet at screen (footX, footY); footX tracks the
 // smoothed CoM so it slides with her sway. radius scales with her on-screen size.
@@ -117,6 +170,50 @@ function drawShadow(ctx: CanvasRenderingContext2D, footX: number, footY: number,
   ctx.arc(0, 0, 1, 0, 7)
   ctx.fill()
   ctx.restore()
+}
+
+// SAM-3D-Body 70-keypoint skeleton (mhr70): 65 edges + per-edge colors, lifted from
+// the model's own metadata. Indices into the 70-kp array. Drives the "x-ray A" overlay.
+const SAM_EDGES: [number, number][] = [
+  [13, 11], [11, 9], [14, 12], [12, 10], [9, 10], [5, 9], [6, 10], [5, 6], [5, 7], [6, 8],
+  [7, 62], [8, 41], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 6], [13, 15], [13, 16],
+  [13, 17], [14, 18], [14, 19], [14, 20], [62, 45], [45, 44], [44, 43], [43, 42], [62, 49],
+  [49, 48], [48, 47], [47, 46], [62, 53], [53, 52], [52, 51], [51, 50], [62, 57], [57, 56],
+  [56, 55], [55, 54], [62, 61], [61, 60], [60, 59], [59, 58], [41, 24], [24, 23], [23, 22],
+  [22, 21], [41, 28], [28, 27], [27, 26], [26, 25], [41, 32], [32, 31], [31, 30], [30, 29],
+  [41, 36], [36, 35], [35, 34], [34, 33], [41, 40], [40, 39], [39, 38], [38, 37],
+]
+const SAM_COLORS: string[] = [
+  '#00ff00', '#00ff00', '#ff8000', '#ff8000', '#3399ff', '#3399ff', '#3399ff', '#3399ff', '#00ff00',
+  '#ff8000', '#00ff00', '#ff8000', '#3399ff', '#3399ff', '#3399ff', '#3399ff', '#3399ff', '#3399ff',
+  '#3399ff', '#00ff00', '#00ff00', '#00ff00', '#ff8000', '#ff8000', '#ff8000', '#ff8000', '#ff8000',
+  '#ff8000', '#ff8000', '#ff99ff', '#ff99ff', '#ff99ff', '#ff99ff', '#66b2ff', '#66b2ff', '#66b2ff',
+  '#66b2ff', '#ff3333', '#ff3333', '#ff3333', '#ff3333', '#00ff00', '#00ff00', '#00ff00', '#00ff00',
+  '#ff8000', '#ff8000', '#ff8000', '#ff8000', '#ff99ff', '#ff99ff', '#ff99ff', '#ff99ff', '#66b2ff',
+  '#66b2ff', '#66b2ff', '#66b2ff', '#ff3333', '#ff3333', '#ff3333', '#ff3333', '#00ff00', '#00ff00',
+  '#00ff00', '#00ff00',
+]
+
+// Draw the SAM-3D-Body rig: 65 colored bones + keypoint dots. `kp` = 70 normalized [x,y].
+function drawSamOverlay(
+  ctx: CanvasRenderingContext2D,
+  kp: [number, number][],
+  project: (ux: number, uy: number) => [number, number],
+) {
+  ctx.lineWidth = 2
+  for (let e = 0; e < SAM_EDGES.length; e++) {
+    const [a, b] = SAM_EDGES[e]
+    const pa = kp[a], pb = kp[b]
+    if (!pa || !pb) continue
+    const A = project(pa[0], pa[1]), B = project(pb[0], pb[1])
+    ctx.strokeStyle = SAM_COLORS[e] ?? '#60f'
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  for (const p of kp) {
+    const P = project(p[0], p[1])
+    ctx.beginPath(); ctx.arc(P[0], P[1], 1.8, 0, 7); ctx.fill()
+  }
 }
 
 // Safari won't decode a display:none / visibility:hidden video, so a canvas fed by
@@ -146,6 +243,14 @@ type PoseFrame = {
   kp: [number, number, number][] // [x, y, score]
 }
 
+// SAM-3D-Body rig (one clip's <clip>.s3body.json): 70 keypoints/frame, normalized
+// 0..1 to the color frame. Body + feet + face + full hands (5 fingers × 4 joints).
+export type SamDoc = {
+  fps: number
+  frames: number
+  kp: ([number, number][] | null)[] // per frame: 70 [x,y] (or null on a failed frame)
+}
+
 type Props = {
   src: string
   seq?: number // bumps every advance — re-runs the load effect even if src repeats
@@ -154,8 +259,15 @@ type Props = {
   baseline?: [number, number] // fixed screen point the feet sit at, all clips
   zoom?: number // global user zoom multiplier
   pose?: PoseDoc | null // this clip's pose data, for the optional overlay
-  showOverlay?: boolean // draw the pose / com / face overlay ("x-ray vision")
+  s3body?: SamDoc | null // this clip's SAM-3D-Body 70-kp rig (contents/<clip>.s3body.json)
+  mouth?: Mouth | null // this clip's SAM3 mouth track (contents/<clip>.mouth.json)
+  mouthMode?: MouthMode // 'contour' = polygon overlay, 'erase' = shader flat-fill, 'off' = neither
+  showOverlay?: boolean // draw the x-ray overlay
+  overlaySource?: 'bizarre' | 'sam' // x-ray B = bizarre (com/face/kp), x-ray A = SAM rig
   showShadow?: boolean // draw a soft contact shadow under her feet (tracks com x)
+  fps?: number // clip fps, for the frame scrubber (default 24)
+  scrub?: number | null // pin to this frame (pauses); null = autoplay
+  onFrame?: (frame: number, total: number) => void // emitted each draw for the scrubber
   onClipEnd?: () => void
   onPlaying?: () => void // fired once when playback actually starts (hide the poster)
   blendMs?: number
@@ -175,8 +287,15 @@ export default function Stage({
   baseline = [0.5, 0.87],
   zoom = 1,
   pose = null,
+  s3body = null,
+  mouth = null,
+  mouthMode = 'off',
   showOverlay = false,
+  overlaySource = 'bizarre',
   showShadow = false,
+  fps = 24,
+  scrub = null,
+  onFrame,
   onClipEnd,
   onPlaying,
   blendMs = 150,
@@ -203,15 +322,34 @@ export default function Stage({
   const slotPose = useRef<[PoseDoc | null, PoseDoc | null]>([pose, pose]) // per-slot pose
   const poseRef = useRef(pose) // latest pose prop, assigned to a slot on load
   poseRef.current = pose
+  const slotMouth = useRef<[Mouth | null, Mouth | null]>([mouth, mouth]) // per-slot mouth track
+  const mouthRef = useRef(mouth) // latest mouth prop, assigned to a slot on load
+  mouthRef.current = mouth
+  const slotS3body = useRef<[SamDoc | null, SamDoc | null]>([s3body, s3body]) // per-slot SAM rig
+  const s3bodyRef = useRef(s3body) // latest s3body prop, assigned to a slot on load
+  s3bodyRef.current = s3body
+  const polyBuf = useRef(new Float32Array(32)) // scratch: 16 vec2 uploaded for shader erase
   const lastLoaded = useRef(0) // slot the most recent clip loaded into (pose fetch lands here)
   // Temporal smoothing state for the com/face markers (dt-based EMA in the draw loop).
   const smooth = useRef<{ com: [number, number]; face: [number, number]; idx: number; slot: number; t: number } | null>(null)
-  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay, showShadow }) // latest props for the loop
-  cur.current = { scale, anchor, baseline, zoom, showOverlay, showShadow }
+  const cur = useRef({ scale, anchor, baseline, zoom, showOverlay, overlaySource, showShadow, mouthMode, fps }) // latest props for the loop
+  cur.current = { scale, anchor, baseline, zoom, showOverlay, overlaySource, showShadow, mouthMode, fps }
   const onEnd = useRef(onClipEnd)
   onEnd.current = onClipEnd
   const onPlay = useRef(onPlaying)
   onPlay.current = onPlaying
+  const onFrameRef = useRef(onFrame)
+  onFrameRef.current = onFrame
+  const scrubRef = useRef(scrub) // null = autoplay; a number pins/pauses to that frame
+  scrubRef.current = scrub
+  // requestVideoFrameCallback state: drive the frame index off the ACTUALLY-DISPLAYED
+  // frame (metadata.mediaTime), not video.currentTime — currentTime jumps on seek while
+  // the decoded frame lags, so the polygon would lead the video (worst on fast scrub).
+  const mediaT = useRef<[number, number]>([0, 0]) // latest presented frame time per slot
+  const vfDirty = useRef<[boolean, boolean]>([false, false]) // a new presented frame awaits upload
+  const vfHandles = useRef<[number, number]>([0, 0])
+  const texInit = useRef<[boolean, boolean]>([false, false]) // first real frame uploaded per slot
+  const hasRVFC = useRef(false)
 
   // GL setup + draw loop (two video textures, mixed by `mixv`).
   useEffect(() => {
@@ -220,6 +358,26 @@ export default function Stage({
     const b = vRef[1].current!
     a.muted = true // imperative — React's `muted` attr doesn't reliably set the property
     b.muted = true
+    // Per-slot rVFC: record each presented frame's mediaTime + flag the texture dirty.
+    // Re-registers itself (one-shot API). Chrome + Safari/iOS support it; fallback below.
+    hasRVFC.current = 'requestVideoFrameCallback' in a
+    const regVF = (slot: 0 | 1, v: HTMLVideoElement) => {
+      const cb = (_now: number, meta: VideoFrameCallbackMetadata) => {
+        mediaT.current[slot] = meta.mediaTime
+        vfDirty.current[slot] = true
+        vfHandles.current[slot] = v.requestVideoFrameCallback(cb)
+      }
+      vfHandles.current[slot] = v.requestVideoFrameCallback(cb)
+    }
+    if (hasRVFC.current) {
+      regVF(0, a)
+      regVF(1, b)
+    }
+    // NOTE: we deliberately do NOT sync on `seeked`. seeked fires at decode-ready
+    // (~17ms) but texImage2D shows the COMPOSITOR-PRESENTED frame, which lands at the
+    // rVFC callback (~39ms). Keying mediaT to seeked made the overlay jump a frame
+    // before the texture could show it (the "rig leads the video" bug). rVFC fires on
+    // paused seeks too, so it alone keeps the overlay locked to the displayed frame.
     // preserveDrawingBuffer only in freeze/test mode: a full-page screenshot may
     // capture after the buffer is composited+cleared, blanking the canvas. Keeping
     // the buffer makes the frozen frame survive any capture path. Off in normal use
@@ -276,6 +434,11 @@ export default function Stage({
     const aspectLoc = gl.getUniformLocation(pr, 'aspect')
     const fasALoc = gl.getUniformLocation(pr, 'fasA')
     const fasBLoc = gl.getUniformLocation(pr, 'fasB')
+    const uMouthLoc = gl.getUniformLocation(pr, 'uMouth')
+    const uSkinLoc = gl.getUniformLocation(pr, 'uSkin')
+    const uBoxLoc = gl.getUniformLocation(pr, 'uBox')
+    const uHasMouthLoc = gl.getUniformLocation(pr, 'uHasMouth')
+    const uMarginLoc = gl.getUniformLocation(pr, 'uMargin')
     gl.disable(gl.BLEND) // single quad written straight; browser composites the canvas
 
     // 2D overlay context (pose / com / face) + shadow context (behind the sprite),
@@ -316,6 +479,16 @@ export default function Stage({
     window.addEventListener('resize', sizeCanvas)
 
     let raf = 0
+    // The frame the user actually SEES. While scrubbing (paused) the displayed frame
+    // only advances on `seeked`, so use mediaT (kept by the seeked listener) — this is
+    // what locks the overlay to the video during scrub, regardless of rVFC. During
+    // playback use rVFC's presented mediaTime, else currentTime (legacy fallback).
+    // The frame the user actually SEES = the compositor-presented frame, whose time is
+    // mediaT (kept by rVFC, which fires on both playback and paused seeks). Tying the
+    // overlay to this — not currentTime — keeps it locked to the video. Legacy fallback
+    // (no rVFC): currentTime, which leads slightly.
+    const ftime = (slot: number, v: HTMLVideoElement) =>
+      hasRVFC.current ? mediaT.current[slot] : v.currentTime
     const draw = (now: number) => {
       // Start a pending transition once the incoming clip actually has a frame
       // (readyState-driven, not event-driven — 'playing' was unreliable and could
@@ -333,7 +506,7 @@ export default function Stage({
       }
       // Poll for the active clip ending (Safari drops 'ended'/'playing' events
       // intermittently → the loop would freeze). Fire onClipEnd once per clip.
-      if (pending.current < 0 && !endedFired.current) {
+      if (pending.current < 0 && !endedFired.current && scrubRef.current == null) {
         const av = active.current === 0 ? a : b
         if (av.ended || (av.duration > 0 && av.currentTime >= av.duration - 0.05)) {
           endedFired.current = true
@@ -346,16 +519,20 @@ export default function Stage({
         const e = t * t * (3 - 2 * t)
         mixVal.current = t >= 1 ? mixTarget.current : mixFrom.current + (mixTarget.current - mixFrom.current) * e
       }
-      if (a.readyState >= 2) {
-        gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, texA)
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a)
+      // Upload a slot's frame: with rVFC, only when a new frame was presented (dirty);
+      // without it, every rAF (legacy behavior). Either way once readyState allows.
+      const uploadTex = (slot: 0 | 1, v: HTMLVideoElement, unit: number, tex: WebGLTexture | null) => {
+        const need = hasRVFC.current ? vfDirty.current[slot] || !texInit.current[slot] : true
+        if (v.readyState >= 2 && need) {
+          gl.activeTexture(gl.TEXTURE0 + unit)
+          gl.bindTexture(gl.TEXTURE_2D, tex)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v)
+          vfDirty.current[slot] = false
+          texInit.current[slot] = true
+        }
       }
-      if (b.readyState >= 2) {
-        gl.activeTexture(gl.TEXTURE1)
-        gl.bindTexture(gl.TEXTURE_2D, texB)
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, b)
-      }
+      uploadTex(0, a, 0, texA)
+      uploadTex(1, b, 1, texB)
       gl.viewport(0, 0, cv.width, cv.height)
       gl.uniform1f(mixLoc, mixVal.current)
       gl.uniform1f(zoomLoc, cur.current.zoom)
@@ -370,6 +547,28 @@ export default function Stage({
       gl.uniform1f(sclALoc, slotScale.current[0])
       gl.uniform2fv(ancBLoc, slotAnchor.current[1])
       gl.uniform1f(sclBLoc, slotScale.current[1])
+      // Mouth erase ('erase' mode): upload the active clip's current-frame 16-gon + skin.
+      const eslot = active.current
+      const eav = eslot === 0 ? a : b
+      const edoc = slotMouth.current[eslot]
+      let hasMouth = 0
+      if (cur.current.mouthMode === 'erase' && edoc && edoc.frames.length && eav.duration > 0) {
+        const ei = Math.max(0, Math.min(edoc.frames.length - 1, Math.floor(ftime(eslot, eav) * (edoc.fps || 24))))
+        const ef = edoc.frames[ei]
+        if (ef) {
+          const pb = polyBuf.current
+          for (let i = 0; i < 16; i++) {
+            pb[i * 2] = ef.poly[i][0]
+            pb[i * 2 + 1] = ef.poly[i][1]
+          }
+          gl.uniform2fv(uMouthLoc, pb)
+          gl.uniform3f(uSkinLoc, ef.skin[0] / 255, ef.skin[1] / 255, ef.skin[2] / 255)
+          gl.uniform4f(uBoxLoc, ef.box[0], ef.box[1], ef.box[2], ef.box[3])
+          hasMouth = 1
+        }
+      }
+      gl.uniform1f(uHasMouthLoc, hasMouth)
+      gl.uniform1f(uMarginLoc, 0.006)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
@@ -379,6 +578,12 @@ export default function Stage({
       // transform inverts the sprite shader so normalized frame coords → screen px.
       const slot = active.current
       const av = slot === 0 ? a : b
+      // Frame scrubber readout: emit the displayed frame (floor) + total each draw.
+      if (onFrameRef.current && av.duration > 0) {
+        const fpsNow = cur.current.fps || 24
+        const total = Math.max(1, Math.round(av.duration * fpsNow))
+        onFrameRef.current(Math.min(total - 1, Math.floor(ftime(slot, av) * fpsNow)), total)
+      }
       const doc = slotPose.current[slot]
       const anc = slotAnchor.current[slot]
       const kk = slotScale.current[slot] * cur.current.zoom
@@ -433,14 +638,36 @@ export default function Stage({
       if (octx) {
         octx.setTransform(dpr, 0, 0, dpr, 0, 0)
         octx.clearRect(0, 0, cssW, cssH)
-        if (cur.current.showOverlay && fr) drawOverlay(octx, fr, project, cssW, cssH)
+        if (cur.current.showOverlay) {
+          if (cur.current.overlaySource === 'sam') {
+            // x-ray A: the SAM-3D-Body rig (70 kp + bones), frame-indexed like pose.
+            const sdoc = slotS3body.current[slot]
+            if (sdoc && sdoc.kp.length && av.duration > 0) {
+              const si = Math.max(0, Math.min(sdoc.kp.length - 1, Math.round(av.currentTime * (sdoc.fps || 24))))
+              const skp = sdoc.kp[si]
+              if (skp) drawSamOverlay(octx, skp, project)
+            }
+          } else if (fr) {
+            drawOverlay(octx, fr, project, cssW, cssH) // x-ray B: bizarre com/face/kp
+          }
+        }
+        // Mouth contour ('contour' mode): the SAM3 polygon as a debug outline.
+        const mdoc = slotMouth.current[slot]
+        if (cur.current.mouthMode === 'contour' && mdoc && mdoc.frames.length && av.duration > 0) {
+          // Index by the displayed-frame time (rVFC mediaTime), floored — see ftime.
+          const mi = Math.max(0, Math.min(mdoc.frames.length - 1, Math.floor(ftime(slot, av) * (mdoc.fps || 24))))
+          const mf = mdoc.frames[mi]
+          if (mf) drawMouthContour(octx, mf.poly, project)
+        }
       }
       if (!playingFired.current) {
         const av = active.current === 0 ? a : b
         // Frozen: ready once the seek landed (frame decoded) and we've drawn it.
         // Live: ready once playback advances past 0. Either way the frame on screen
         // now is the one a screenshot will capture, so flag the canvas.
-        const ready = freezeAt != null ? frozenSeeked.current && av.readyState >= 2 : av.readyState >= 2 && av.currentTime > 0
+        const ready =
+          (freezeAt != null ? frozenSeeked.current && av.readyState >= 2 : av.readyState >= 2 && av.currentTime > 0) &&
+          texInit.current[active.current] // a real frame is actually in the texture
         if (ready) {
           playingFired.current = true
           cv.dataset.ready = '1'
@@ -454,6 +681,10 @@ export default function Stage({
       cancelAnimationFrame(raf)
       ro.disconnect()
       window.removeEventListener('resize', sizeCanvas)
+      if (hasRVFC.current) {
+        a.cancelVideoFrameCallback?.(vfHandles.current[0])
+        b.cancelVideoFrameCallback?.(vfHandles.current[1])
+      }
     }
   }, [])
 
@@ -475,6 +706,8 @@ export default function Stage({
       slotScale.current[0] = cur.current.scale
       slotAnchor.current[0] = cur.current.anchor
       slotPose.current[0] = poseRef.current
+      slotMouth.current[0] = mouthRef.current
+      slotS3body.current[0] = s3bodyRef.current
       lastLoaded.current = 0
       const v = vRef[0].current!
       v.src = src
@@ -487,6 +720,8 @@ export default function Stage({
     slotScale.current[incoming] = cur.current.scale // this clip's framing scale/anchor
     slotAnchor.current[incoming] = cur.current.anchor
     slotPose.current[incoming] = poseRef.current
+    slotMouth.current[incoming] = mouthRef.current
+    slotS3body.current[incoming] = s3bodyRef.current
     lastLoaded.current = incoming
     const v = vRef[incoming].current!
     v.src = src
@@ -502,6 +737,31 @@ export default function Stage({
   useEffect(() => {
     slotPose.current[lastLoaded.current] = pose
   }, [pose])
+
+  // Mouth JSON also arrives async — assign it to the slot the latest clip loaded into.
+  useEffect(() => {
+    slotMouth.current[lastLoaded.current] = mouth
+  }, [mouth])
+
+  // SAM-3D-Body rig JSON arrives async too — same late-assignment.
+  useEffect(() => {
+    slotS3body.current[lastLoaded.current] = s3body
+  }, [s3body])
+
+  // Frame scrubber: a number pins/pauses the active video to that frame; null resumes
+  // autoplay. The draw loop keeps uploading the (paused) frame, so the contour holds too.
+  useEffect(() => {
+    const av = vRef[active.current].current
+    if (!av || freezeAt != null) return
+    if (scrub == null) {
+      if (av.paused) av.play().catch(() => {})
+    } else {
+      av.pause()
+      const t = Math.max(0, scrub) / (fps || 24)
+      if (Math.abs(av.currentTime - t) > 1e-3) av.currentTime = t
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrub, fps])
 
   // Three stacked layers that fill the wrapper: shadow (behind) → character (GL) →
   // x-ray overlay (on top). The GL canvas is transparent, so the shadow shows through

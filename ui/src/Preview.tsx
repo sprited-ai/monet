@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
-import type { PoseDoc } from './Stage'
+import type { PoseDoc, SamDoc, MouthMode } from './Stage'
+import type { Mouth } from './scene/types'
 
 // Apple Photos-style stage: a big player up top, and a horizontal filmstrip of
 // every clip's thumbnail along the bottom. Whatever thumbnail is centered under
@@ -54,9 +55,18 @@ export default function Preview() {
   const [seq, setSeq] = useState(0) // bumps to (re)trigger the stage load
   const [playing, setPlaying] = useState(false) // playback has actually started
   const [zoom, setZoom] = useState(TEST?.zoom ?? 1) // global user zoom multiplier
-  const [overlay, setOverlay] = useState(true) // "x-ray vision" — pose overlay, on by default
+  const [overlay, setOverlay] = useState<'off' | 'sam' | 'bizarre'>('sam') // x-ray: A=SAM, B=bizarre
   const [shadow, setShadow] = useState(true) // contact shadow under her feet, on by default
-  const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data
+  const [pose, setPose] = useState<PoseDoc | null>(null) // current clip's pose data (bizarre)
+  const [s3body, setS3body] = useState<SamDoc | null>(null) // current clip's SAM-3D-Body rig
+  const [mouth, setMouth] = useState<Mouth | null>(null) // current clip's SAM3 mouth track
+  const [mouthMode, setMouthMode] = useState<MouthMode>('contour') // contour → erase → off
+  const [scrub, setScrub] = useState<number | null>(null) // null = autoplay; a frame index pins it
+  const [total, setTotal] = useState(0) // total frames (for the scrubber range), set on clip change
+  const sliderRef = useRef<HTMLInputElement>(null) // scrubber input, driven by ref to avoid per-frame re-render
+  const frameLabelRef = useRef<HTMLSpanElement>(null)
+  const frameRef = useRef(0) // latest displayed frame, so the pause button can pin to it
+  const stageWrapRef = useRef<HTMLDivElement>(null) // wheel/pinch zoom target
   const [barH, setBarH] = useState(132) // filmstrip bar height (stage sits above it)
   const stripRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -91,8 +101,10 @@ export default function Preview() {
         if (e.framing) fmap[name] = e.framing
       }
       setFramingOf(fmap)
-      const want = TEST?.clip ?? 'monet-idle-1'
-      const start = anims.findIndex((c) => c.name === want)
+      // Deep-link: ?clip=<name> (e.g. ?clip=monet-talk-2) wins, else the test/default clip.
+      const urlClip = new URLSearchParams(window.location.search).get('clip')
+      const want = urlClip ?? TEST?.clip ?? 'monet-idle-1'
+      const start = anims.findIndex((c) => c.name === want || c.key.includes(want))
       setSel(start >= 0 ? start : 0)
     })
   }, [])
@@ -192,6 +204,14 @@ export default function Preview() {
 
   const current = clips[sel]
 
+  // Keep the URL in sync with the selection so it's shareable / reloadable.
+  useEffect(() => {
+    if (!current) return
+    const u = new URL(window.location.href)
+    u.searchParams.set('clip', current.name)
+    window.history.replaceState(null, '', u)
+  }, [current?.name])
+
   // Fetch the selected clip's pose JSON for the overlay. Missing (not yet generated)
   // → null, and the overlay simply draws nothing for that clip.
   useEffect(() => {
@@ -201,14 +221,55 @@ export default function Preview() {
     }
     let cancelled = false
     setPose(null)
+    setS3body(null)
+    setMouth(null)
+    setScrub(null) // new clip → back to autoplay
     fetch(`/contents/${current.key.replace(/\.mp4$/, '.pose.json')}`)
       .then((r) => (r.ok ? (r.json() as Promise<PoseDoc>) : null))
       .then((d) => !cancelled && setPose(d))
       .catch(() => !cancelled && setPose(null))
+    fetch(`/contents/${current.key.replace(/\.mp4$/, '.s3body.json')}`)
+      .then((r) => (r.ok ? (r.json() as Promise<SamDoc>) : null))
+      .then((d) => !cancelled && setS3body(d))
+      .catch(() => !cancelled && setS3body(null))
+    fetch(`/contents/${current.key.replace(/\.mp4$/, '.mouth.json')}`)
+      .then((r) => (r.ok ? (r.json() as Promise<Mouth>) : null))
+      .then((d) => !cancelled && setMouth(d))
+      .catch(() => !cancelled && setMouth(null))
     return () => {
       cancelled = true
     }
   }, [current?.key])
+
+  // Frame readout from the Stage (each draw). Drive the scrubber + label by ref so the
+  // ~60fps stream doesn't re-render Preview; only `total` (rare) goes through state.
+  const onFrame = useCallback(
+    (f: number, t: number) => {
+      frameRef.current = f
+      if (t !== total) setTotal(t)
+      if (scrub === null) {
+        if (sliderRef.current) sliderRef.current.value = String(f)
+        if (frameLabelRef.current) frameLabelRef.current.textContent = `${f} / ${Math.max(0, t - 1)}`
+      }
+    },
+    [scrub, total],
+  )
+  const clipFps = mouth?.fps ?? pose?.fps ?? 24
+
+  // Wheel / trackpad-pinch dollies the camera on Monet (the zoom slider is gone —
+  // pinch is enough). ctrl+wheel = pinch (tiny deltas → bigger gain). Native listener
+  // (passive:false) so we can preventDefault the browser's page-zoom on pinch.
+  useEffect(() => {
+    const el = stageWrapRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const k = e.ctrlKey ? 0.02 : 0.0016
+      setZoom((z) => Math.min(4, Math.max(0.5, z * Math.exp(-e.deltaY * k))))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   return (
     <div
@@ -229,7 +290,7 @@ export default function Preview() {
       {/* Stage — fills the screen above the filmstrip; canvas object-fit:contain
           keeps Monet undistorted and fully visible (never under the strip). */}
       {current && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barH }}>
+        <div ref={stageWrapRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: barH }}>
           <Stage
             src={clipSrc(current.key)}
             seq={seq}
@@ -237,7 +298,14 @@ export default function Preview() {
             anchor={geom(current.name).anchor}
             zoom={zoom}
             pose={pose}
-            showOverlay={overlay}
+            s3body={s3body}
+            mouth={mouth}
+            mouthMode={mouthMode}
+            fps={clipFps}
+            scrub={scrub}
+            onFrame={onFrame}
+            showOverlay={overlay !== 'off'}
+            overlaySource={overlay === 'sam' ? 'sam' : 'bizarre'}
             showShadow={shadow}
             onClipEnd={onClipEnd}
             onPlaying={() => setPlaying(true)}
@@ -282,57 +350,91 @@ export default function Preview() {
           onPointerDown={(e) => e.stopPropagation()}
           style={{ position: 'absolute', top: 12, right: 14, display: 'flex', gap: 8 }}
         >
+          {zoom !== 1 && (
+            <button onClick={() => setZoom(1)} title="reset zoom" style={pill(false)}>
+              ⊙ {zoom.toFixed(1)}× · reset
+            </button>
+          )}
           <button onClick={() => setShadow((v) => !v)} title="toggle contact shadow" style={pill(shadow)}>
             {shadow ? '◉' : '○'} shadow
           </button>
-          <button onClick={() => setOverlay((v) => !v)} title="toggle pose overlay (x-ray)" style={pill(overlay)}>
-            {overlay ? '◉' : '○'} x-ray
-            {overlay && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+          <button
+            onClick={() => setOverlay((v) => (v === 'sam' ? 'bizarre' : v === 'bizarre' ? 'off' : 'sam'))}
+            title="x-ray: A (SAM rig) → B (bizarre) → off"
+            style={pill(overlay !== 'off')}
+          >
+            {overlay === 'off' ? '○ x-ray' : overlay === 'sam' ? '◉ x-ray A · SAM' : '◉ x-ray B · bizarre'}
+            {overlay === 'sam' && !s3body && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+            {overlay === 'bizarre' && !pose && current && <span style={{ opacity: 0.8 }}>· no data</span>}
+          </button>
+          <button
+            onClick={() => setMouthMode((m) => (m === 'contour' ? 'erase' : m === 'erase' ? 'off' : 'contour'))}
+            title="mouth: contour overlay → erase (flat-fill) → off"
+            style={pill(mouthMode !== 'off')}
+          >
+            {mouthMode === 'contour' ? '◈' : mouthMode === 'erase' ? '◉' : '○'} mouth
+            {mouthMode === 'contour' ? ' · contour' : mouthMode === 'erase' ? ' · erase' : ''}
+            {mouthMode !== 'off' && !mouth && current && <span style={{ opacity: 0.8 }}>· no data</span>}
           </button>
         </div>
 
-        {/* Zoom control */}
-        <div
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            bottom: barH + 12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: '#ffffffcc',
-            padding: '6px 12px',
-            borderRadius: 999,
-            font: '12px ui-monospace, monospace',
-            color: '#6b5f54',
-          }}
-        >
-          <span>zoom</span>
-          <input
-            type="range"
-            min={0.5}
-            max={2}
-            step={0.01}
-            value={zoom}
-            onChange={(e) => setZoom(parseFloat(e.target.value))}
-            style={{ width: 160 }}
-          />
-          <span style={{ width: 34, textAlign: 'right' }}>{zoom.toFixed(2)}×</span>
-          <button
-            onClick={() => setZoom(1)}
+        {/* Frame scrubber — autoplay by default; grabbing the slider pins/pauses the frame. */}
+        {current && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
             style={{
-              border: 0,
-              background: 'transparent',
-              cursor: 'pointer',
-              color: '#c0392b',
-              font: 'inherit',
+              position: 'absolute',
+              bottom: barH + 52,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#ffffffcc',
+              padding: '6px 12px',
+              borderRadius: 999,
+              font: '12px ui-monospace, monospace',
+              color: '#6b5f54',
             }}
           >
-            reset
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                if (scrub === null) {
+                  const f = frameRef.current
+                  if (sliderRef.current) sliderRef.current.value = String(f)
+                  if (frameLabelRef.current) frameLabelRef.current.textContent = `${f} / ${Math.max(0, total - 1)}`
+                  setScrub(f)
+                } else setScrub(null)
+              }}
+              title={scrub === null ? 'pause' : 'play'}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', font: '15px ui-monospace', color: '#6b5f54' }}
+            >
+              {scrub === null ? '⏸' : '▶'}
+            </button>
+            <input
+              ref={sliderRef}
+              type="range"
+              min={0}
+              max={Math.max(1, total - 1)}
+              defaultValue={0}
+              step={1}
+              onPointerDown={(e) => {
+                const v = Number((e.target as HTMLInputElement).value)
+                if (frameLabelRef.current) frameLabelRef.current.textContent = `${v} / ${Math.max(0, total - 1)}`
+                setScrub(v)
+              }}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                if (frameLabelRef.current) frameLabelRef.current.textContent = `${v} / ${Math.max(0, total - 1)}`
+                setScrub(v)
+              }}
+              style={{ width: 280 }}
+            />
+            <span ref={frameLabelRef} style={{ minWidth: 70, textAlign: 'right' }}>
+              0 / {Math.max(0, total - 1)}
+            </span>
+          </div>
+        )}
 
       {/* Filmstrip — Photos.app style: the centered item is the selected one,
           emphasized with a white ring + soft shadow; neighbors shrink + dim; the
