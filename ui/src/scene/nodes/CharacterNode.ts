@@ -266,8 +266,8 @@ export class CharacterNode implements SceneNode {
     gl.uniform1f(this.u.uHasB, mB.has)
     // Mouth erase reach (u-space; frame is 640px so 1.0 = 640px). Erase is solid out to
     // uMargin (~10px dilation), then feathers OUTWARD over uMouthFeather (~5px).
-    gl.uniform1f(this.u.uMargin, 0.016)
-    gl.uniform1f(this.u.uMouthFeather, 0.008)
+    gl.uniform1f(this.u.uMargin, 0.012)
+    gl.uniform1f(this.u.uMouthFeather, 0.003)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 

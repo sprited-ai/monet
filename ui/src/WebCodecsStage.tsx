@@ -85,7 +85,7 @@ export default function WebCodecsStage({
   feather = 0.01,
   mouth = null,
   mouthMode = 'erase',
-  mouthMargin = 0.016,
+  mouthMargin = 0.012,
   pose = null,
   s3body = null,
   face = null,
@@ -247,7 +247,7 @@ export default function WebCodecsStage({
       }
       gl.uniform1f(uHasMouth, hasMouth)
       gl.uniform1f(uMargin, c.mouthMargin)
-      gl.uniform1f(uMouthFeather, 0.008) // ~5px outward feather (frame is 640px)
+      gl.uniform1f(uMouthFeather, 0.003) // ~2px outward feather (frame is 640px)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
