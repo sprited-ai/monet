@@ -271,9 +271,11 @@ export default function Whiteroom() {
   // Backtick toggles the debug overlay. A reserved hotkey — works even while the
   // chat box is focused (preventDefault keeps the `\`` out of the input), since the
   // input is the primary surface and the old "not on INPUT" guard just swallowed it.
+  // Match on e.code (physical key), not e.key: under a Korean/CJK IME the keydown
+  // arrives as key:'Process' (keyCode 229) and `e.key === '`'` never matches.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === '`') {
+      if (e.code === 'Backquote' || e.key === '`') {
         e.preventDefault()
         setDebug((d) => !d)
       }
