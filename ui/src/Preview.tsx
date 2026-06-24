@@ -310,6 +310,13 @@ export default function Preview() {
               feather={0.04}
               mouth={mouth}
               mouthMode={mouthMode}
+              pose={pose}
+              s3body={s3body}
+              face={face}
+              showOverlay={overlay !== 'off'}
+              overlaySource={overlay === 'sam' ? 'sam' : 'bizarre'}
+              showFace={faceRig}
+              showShadow={shadow}
               fps={clipFps}
               scrub={scrub}
               onFrame={onFrame}

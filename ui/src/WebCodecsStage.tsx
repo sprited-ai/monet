@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Mouth } from './scene/types'
-import type { MouthMode } from './Stage'
+import {
+  drawOverlay,
+  drawSamOverlay,
+  drawFaceOverlay,
+  drawShadow,
+  type MouthMode,
+  type PoseDoc,
+  type SamDoc,
+  type FaceDoc,
+} from './Stage'
 import { decodeClip, webCodecsSupported, type DecodedClip } from './webcodecs/ClipDecoder'
 
 // A WebCodecs-backed twin of <Stage> for ONE clip — proof that frame-exact mouth erase is
@@ -52,6 +61,13 @@ type Props = {
   mouth?: Mouth | null
   mouthMode?: MouthMode
   mouthMargin?: number // shader dilation/feather radius (u-space); bigger = covers more lip
+  pose?: PoseDoc | null // bizarre-pose-estimator (x-ray B)
+  s3body?: SamDoc | null // SAM-3D-Body rig (x-ray A)
+  face?: FaceDoc | null // anime-face-detector landmarks (face rig)
+  showOverlay?: boolean
+  overlaySource?: 'bizarre' | 'sam'
+  showFace?: boolean
+  showShadow?: boolean
   fps?: number
   scrub?: number | null
   onFrame?: (frame: number, total: number) => void
@@ -69,6 +85,13 @@ export default function WebCodecsStage({
   mouth = null,
   mouthMode = 'erase',
   mouthMargin = 0.012,
+  pose = null,
+  s3body = null,
+  face = null,
+  showOverlay = false,
+  overlaySource = 'sam',
+  showFace = false,
+  showShadow = false,
   fps = 24,
   scrub = null,
   onFrame,
@@ -77,11 +100,12 @@ export default function WebCodecsStage({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
+  const shadowRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported' | 'error'>('loading')
 
   // latest props for the loop (avoid re-running the GL effect on every prop change)
-  const cur = useRef({ scale, anchor, baseline, zoom, feather, mouth, mouthMode, mouthMargin, fps })
-  cur.current = { scale, anchor, baseline, zoom, feather, mouth, mouthMode, mouthMargin, fps }
+  const cur = useRef({ scale, anchor, baseline, zoom, feather, mouth, mouthMode, mouthMargin, pose, s3body, face, showOverlay, overlaySource, showFace, showShadow, fps })
+  cur.current = { scale, anchor, baseline, zoom, feather, mouth, mouthMode, mouthMargin, pose, s3body, face, showOverlay, overlaySource, showFace, showShadow, fps }
   const scrubRef = useRef(scrub)
   scrubRef.current = scrub
   const onFrameRef = useRef(onFrame)
@@ -97,6 +121,8 @@ export default function WebCodecsStage({
     const cv = canvasRef.current!
     const oc = overlayRef.current!
     const octx = oc.getContext('2d')
+    const sc = shadowRef.current!
+    const sctx = sc.getContext('2d')
     const gl = cv.getContext('webgl', { premultipliedAlpha: false, alpha: true })
     if (!gl) {
       setStatus('error')
@@ -143,6 +169,8 @@ export default function WebCodecsStage({
       cv.height = h
       oc.width = w
       oc.height = h
+      sc.width = w
+      sc.height = h
       aspect = w / h
     }
     sizeCanvas()
@@ -216,16 +244,48 @@ export default function WebCodecsStage({
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-      // contour overlay (debug) — same frame idx, so it's locked too
+      // Every overlay indexes the SAME idx as the GL frame → all frame-locked.
+      const proj = (ux: number, uy: number): [number, number] => project(ux, uy, fasV)
+      const pf = c.pose?.poses?.[idx] ?? null
+
+      // Contact shadow — drawn on the BACK canvas (behind the GL sprite).
+      if (sctx) {
+        sctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        sctx.clearRect(0, 0, cssW, cssH)
+        if (c.showShadow) {
+          const [footX, footY] = proj(pf ? pf.com[0] : c.anchor[0], c.anchor[1])
+          let rx = cssW * 0.13
+          if (pf) {
+            const x0 = proj(pf.bbox[0], c.anchor[1])[0]
+            const x1 = proj(pf.bbox[0] + pf.bbox[2], c.anchor[1])[0]
+            rx = Math.abs(x1 - x0) * 0.42
+          }
+          drawShadow(sctx, footX, footY, rx)
+        }
+      }
+
+      // X-ray (pose/SAM), face rig, mouth contour — all on the FRONT overlay, same idx.
       if (octx) {
         octx.setTransform(dpr, 0, 0, dpr, 0, 0)
         octx.clearRect(0, 0, cssW, cssH)
+        if (c.showOverlay) {
+          if (c.overlaySource === 'sam') {
+            const skp = c.s3body?.kp?.[idx]
+            if (skp) drawSamOverlay(octx, skp, proj)
+          } else if (pf) {
+            drawOverlay(octx, pf, proj, cssW, cssH)
+          }
+        }
+        if (c.showFace) {
+          const ff = c.face?.faces?.[idx]
+          if (ff) drawFaceOverlay(octx, ff.kp, proj)
+        }
         if (c.mouthMode === 'contour' && mf?.poly) {
           octx.lineWidth = 2
           octx.strokeStyle = 'rgba(255,70,170,0.95)'
           octx.beginPath()
           mf.poly.forEach(([ux, uy], i) => {
-            const [sx, sy] = project(ux, uy, fasV)
+            const [sx, sy] = proj(ux, uy)
             if (i === 0) octx.moveTo(sx, sy)
             else octx.lineTo(sx, sy)
           })
@@ -263,6 +323,7 @@ export default function WebCodecsStage({
 
   return (
     <div style={{ position: 'relative', ...style }}>
+      <canvas ref={shadowRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
       <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
       {status !== 'ready' && (

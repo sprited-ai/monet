@@ -89,7 +89,7 @@ const POSE_LABELS: string[] = [
 
 // Draw one frame's pose overlay. `project(ux,uy) -> [sx,sy]` inverts the Stage
 // shader transform, mapping normalized color-frame coords to screen pixels.
-function drawOverlay(
+export function drawOverlay(
   ctx: CanvasRenderingContext2D,
   fr: PoseFrame,
   project: (ux: number, uy: number) => [number, number],
@@ -181,7 +181,7 @@ function drawMouthContour(
 // Soft contact-shadow ellipse drawn BEHIND the character (a layer under the GL
 // canvas). Centered under her feet at screen (footX, footY); footX tracks the
 // smoothed CoM so it slides with her sway. radius scales with her on-screen size.
-function drawShadow(ctx: CanvasRenderingContext2D, footX: number, footY: number, rx: number) {
+export function drawShadow(ctx: CanvasRenderingContext2D, footX: number, footY: number, rx: number) {
   const ry = Math.max(3, rx * 0.2) // flat ellipse
   ctx.save()
   ctx.translate(footX, footY)
@@ -233,7 +233,7 @@ const SAM_LABELS: string[] = [
 
 // Draw the SAM-3D-Body rig: 65 colored bones + keypoint dots + name labels.
 // `kp` = 70 normalized [x,y]. Label index→name map: experiments/sam3d-body/README.
-function drawSamOverlay(
+export function drawSamOverlay(
   ctx: CanvasRenderingContext2D,
   kp: [number, number][],
   project: (ux: number, uy: number) => [number, number],
@@ -290,7 +290,7 @@ const FACE_GROUPS: { name: string; edges: [number, number][]; color: string; lbl
 // Draw the anime-face rig: grouped colored edges + keypoint dots + the nose marker +
 // a short label per group. `kp` = 28 normalized [x,y,conf]; points below `KP_MIN`
 // confidence are dimmed (drawn orange) but still plotted.
-function drawFaceOverlay(
+export function drawFaceOverlay(
   ctx: CanvasRenderingContext2D,
   kp: [number, number, number][],
   project: (ux: number, uy: number) => [number, number],
@@ -361,7 +361,7 @@ export type PoseDoc = {
   frames: number
   poses: (PoseFrame | null)[]
 }
-type PoseFrame = {
+export type PoseFrame = {
   bbox: [number, number, number, number]
   com: [number, number]
   face: [number, number]
