@@ -159,6 +159,30 @@ export default function Whiteroom() {
       .catch(() => {})
   }, [])
 
+  // Drive her body to say a line: pick the emotion's clips, show the caption, and
+  // hold the talk loop until the audio (or the muted read-timer) ends. Shared by a
+  // reply (send) and the unprompted welcome-back greeting.
+  const speakReply = useCallback(
+    (reply: { text: string; emotion: Emotion }) => {
+      const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
+      talkClip.current = talk
+      speaking.current = true
+      setCaption(reply.text)
+      setPhase('speaking')
+      script.current = reaction ? [reaction] : [] // a one-shot reaction, then advance() loops `talk`
+      advance() // interrupt the idle clip and start reacting/speaking now
+      if (mutedRef.current) {
+        // silent: hold the caption + talk loop for an estimated read time
+        const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
+        speakTimer.current = window.setTimeout(endSpeaking, capMs)
+      } else {
+        // voiced: talk until the audio finishes
+        speak(reply.text).finally(endSpeaking)
+      }
+    },
+    [advance, endSpeaking],
+  )
+
   const send = useCallback(
     async (text: string) => {
       const msg = text.trim()
@@ -191,24 +215,9 @@ export default function Whiteroom() {
       // Only while the panel has a baseline (memory != null) — re-opening re-syncs.
       setMemory((m) => (m ? { turns: m.turns + 1, memories: stored.length ? [...m.memories, ...stored] : m.memories } : m))
 
-      const { reaction, talk } = REPLY_CLIPS[reply.emotion] ?? REPLY_CLIPS.calm
-      talkClip.current = talk
-      speaking.current = true
-      setCaption(reply.text)
-      setPhase('speaking')
-      script.current = reaction ? [reaction] : [] // a one-shot reaction, then advance() loops `talk`
-      advance() // interrupt the idle clip and start reacting/speaking now
-
-      if (mutedRef.current) {
-        // silent: hold the caption + talk loop for an estimated read time
-        const capMs = Math.max(2800, reply.text.split(/\s+/).length * 360)
-        speakTimer.current = window.setTimeout(endSpeaking, capMs)
-      } else {
-        // voiced: talk until the audio finishes
-        speak(reply.text).finally(endSpeaking)
-      }
+      speakReply(reply)
     },
-    [advance, endSpeaking],
+    [speakReply],
   )
 
   // Push-to-talk: hold Space to talk. Her voice hushes (barge-in), your live
@@ -260,6 +269,24 @@ export default function Whiteroom() {
       framings.current = fr.framings ?? {}
       indexed.current = idx.items ?? {}
       play('monet-greet-1') // her first breath in the room
+      // Welcome-back: once she's awake, if she remembers this person she says a short
+      // line referencing them — the memory moat, made felt (docs/015). Once per tab
+      // session; ambient, so empty/error → silence (the flag is set only on a real
+      // greeting, which also keeps React StrictMode's double-mount from double-greeting).
+      try {
+        if (!sessionStorage.getItem('monet.greeted')) {
+          fetch('/api/greeting', { headers: { 'x-monet-uid': getUid() } })
+            .then((x) => x.json())
+            .then((g) => {
+              if (cancelled || !g?.text) return
+              sessionStorage.setItem('monet.greeted', '1')
+              speakReply({ text: g.text, emotion: (g.emotion || 'calm') as Emotion })
+            })
+            .catch(() => {})
+        }
+      } catch {
+        /* sessionStorage blocked (private mode) — skip the greeting */
+      }
     })
     return () => {
       cancelled = true

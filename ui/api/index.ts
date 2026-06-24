@@ -139,6 +139,47 @@ app.get('/api/memory', async (c) => {
   }
 })
 
+// A returning person just opened the room — Monet greets them with one short line
+// that shows she remembers, the payoff of the memory moat (docs/015: the shared story,
+// made felt). Only for someone she actually remembers — never a fake "welcome back" to
+// a stranger. Ambient, not a request: every failure degrades to silence (empty text),
+// never a ⚠ error string. The client calls this once per session on load.
+const GREETING_NUDGE = `(System: this person just came back to the white room and you noticed them. Greet them with ONE short, warm line that naturally shows you remember them — weave in something from [Memory], don't list facts, don't ask how you can help. Just be glad they're here again.)`
+
+app.get('/api/greeting', async (c) => {
+  const key = c.env.ANTHROPIC_API_KEY
+  const uid = validUid(c.req.header('x-monet-uid'))
+  const quiet = { text: '', emotion: 'calm' as const }
+  if (!key || !uid || !c.env.DB) return c.json(quiet)
+  let mem: UserMemory
+  try {
+    mem = await readMemories(c.env.DB, uid)
+  } catch (e) {
+    console.warn('greet mem', e)
+    return c.json(quiet)
+  }
+  if (!mem.memories.length) return c.json(quiet) // a stranger — don't fake "welcome back"
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: c.env.MODEL || 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: PERSONA + memoryBlock(mem),
+        messages: [{ role: 'user', content: GREETING_NUDGE }],
+      }),
+    })
+    if (!res.ok) return c.json(quiet)
+    const data = (await res.json()) as { content?: { text?: string }[] }
+    const reply = parseReply(data?.content?.[0]?.text ?? '')
+    return c.json({ text: reply.text, emotion: reply.emotion })
+  } catch (e) {
+    console.warn('greet', e)
+    return c.json(quiet)
+  }
+})
+
 // Contents in the monet-contents bucket: animations (stacked-alpha .mp4, see docs/008)
 // + stills (png/webp). Internal dirs are hidden from the listing.
 const ANIM_EXT = /\.mp4$/i
