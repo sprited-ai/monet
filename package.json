@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "bash scripts/desktop.sh",
+    "start": "bash scripts/desktop.sh",
     "dev:web": "npm run dev -w @monet/web",
     "desktop": "bash scripts/desktop.sh",
     "build": "npm run build -w @monet/web",

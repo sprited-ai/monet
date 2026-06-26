@@ -108,12 +108,14 @@ them the screen-read helpers just don't compile and that feature stays off; ever
 
 ```bash
 git clone <this repo>
-cd apps/desktop
-npm install     # also compiles the Swift screen-read helpers (skipped if no swiftc)
-npm start
+cd monet
+npm install     # hoists Electron + compiles the Swift screen-read helpers (skipped if no swiftc)
+npm run dev     # (or npm start) — one command: boots her body locally + the desktop shell
 ```
 
-Monet appears docked in the bottom-right corner, floating over everything.
+Monet appears docked in a corner, floating over everything. **Local-first:** `npm run dev` runs her
+whole body on *your* machine (a local render server + the shell) — nothing of ours is in the loop.
+The hosted body at `monet.sprited.ai` is only a 2nd-class fallback (see `MONET_URL` below).
 
 Then give her a brain:
 
@@ -184,7 +186,7 @@ MONET_URL='http://localhost:1874/desktop' npm start   # run in apps/desktop
 
 | Var | Default | Meaning |
 |---|---|---|
-| `MONET_URL` | `http://localhost:1874/desktop` | Render source; the `/desktop` route (her body in overlay mode). Point at `https://monet.sprited.ai/desktop` once deployed |
+| `MONET_URL` | `http://localhost:1874/desktop` | Render source — her body, served **locally** (`npm run dev` starts it). 2nd-class fallback: set it to the hosted body `https://monet.sprited.ai/desktop` to run the shell without a local server |
 | `MONET_MODEL` | `claude-haiku-4-5` | Anthropic model for the BYOK brain |
 | `MONET_W` / `MONET_H` | `460` / `620` | Her window footprint |
 | `MONET_CORNER` | `br` | `br` \| `bl` \| `tr` \| `tl` |
