@@ -166,12 +166,77 @@ ipcMain.on('monet:set-key', (_e, k) => {
 const DEV_PORT = process.env.MONET_PORT || 1874
 const MONET_URL = process.env.MONET_URL || `http://localhost:${DEV_PORT}/desktop`
 
-// Her footprint on the desktop. Portrait, docked to a corner — a being stands in the corner, not the
-// middle of your screen. Override with env (MONET_W/MONET_H/MONET_CORNER = br|bl|tr|tl).
-const W = Number(process.env.MONET_W) || 460
-const H = Number(process.env.MONET_H) || 620
+// Her base footprint on the desktop. Portrait, docked to a corner — a being stands in the corner, not
+// the middle of your screen. Override the base with env (MONET_W/MONET_H/MONET_CORNER = br|bl|tr|tl).
+const BASE_W = Number(process.env.MONET_W) || 460
+const BASE_H = Number(process.env.MONET_H) || 620
 const CORNER = process.env.MONET_CORNER || 'bl'
 const MARGIN = 24 // horizontal inset from the screen side, + top inset for top corners
+
+// View size — let her be bigger when you want a closer look, picked from the right-click / menubar
+// menu. Presets scale the base footprint; the base aspect (460:620) is kept so her framing and
+// grounded feet hold (the overlay render re-fits every frame — see apps/web Renderer.resize). The
+// base size stays the default; the chosen scale is remembered across launches.
+const SIZES = [
+  { label: 'Small', scale: 0.75 },
+  { label: 'Default', scale: 1 },
+  { label: 'Large', scale: 1.5 },
+  { label: 'Extra large', scale: 2 },
+]
+const VIEW_FILE = path.join(app.getPath('userData'), 'view.json')
+let viewScale = 1 // populated from VIEW_FILE in whenReady, before the window is created
+
+function loadViewScale() {
+  try {
+    if (fs.existsSync(VIEW_FILE)) {
+      const s = Number(JSON.parse(fs.readFileSync(VIEW_FILE, 'utf8')).scale)
+      if (s > 0) return s
+    }
+  } catch (e) {
+    console.warn('[monet] view load', e)
+  }
+  return 1
+}
+
+function saveViewScale(scale) {
+  try {
+    fs.writeFileSync(VIEW_FILE, JSON.stringify({ scale }))
+  } catch (e) {
+    console.warn('[monet] view save', e)
+  }
+}
+
+function sizePx() {
+  return { w: Math.round(BASE_W * viewScale), h: Math.round(BASE_H * viewScale) }
+}
+
+// Resize live to a preset, anchored to her current bottom-centre so her feet stay put and she grows
+// upward in place; clamped to the work area so she never spills off-screen. Remembered for next launch.
+function applyViewScale(scale) {
+  viewScale = scale
+  saveViewScale(scale)
+  if (win) {
+    const b = win.getBounds()
+    const cx = b.x + b.width / 2
+    const bottom = b.y + b.height
+    const { w, h } = sizePx()
+    const wa = screen.getPrimaryDisplay().workArea
+    const x = Math.max(wa.x, Math.min(Math.round(cx - w / 2), wa.x + wa.width - w))
+    const y = Math.max(wa.y, Math.min(Math.round(bottom - h), wa.y + wa.height - h))
+    win.setBounds({ x, y, width: w, height: h })
+  }
+  buildTray() // refresh the radio tick in the menubar
+}
+
+// Radio items for the size submenu — shared by the menubar and the right-click menu.
+function sizeMenuItems() {
+  return SIZES.map((s) => ({
+    label: s.label,
+    type: 'radio',
+    checked: viewScale === s.scale,
+    click: () => applyViewScale(s.scale),
+  }))
+}
 
 /** @type {BrowserWindow | null} */
 let win = null
@@ -198,6 +263,7 @@ function buildTray() {
         label: 'Show / Hide',
         click: () => win && (win.isVisible() ? win.hide() : win.show()),
       },
+      { label: 'Size', submenu: sizeMenuItems() },
       { label: 'Reload Monet', click: () => win && win.reload() },
       { type: 'separator' },
       { label: 'Quit Monet  (⌘⇧Q)', click: () => app.quit() },
@@ -206,6 +272,7 @@ function buildTray() {
 }
 
 function cornerPosition() {
+  const { w: W, h: H } = sizePx()
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea
   const left = CORNER.endsWith('l') ? x + MARGIN : x + width - W - MARGIN
   // Sit MARGIN above the work-area bottom (= the Dock's top edge). The overlay floats BELOW the Dock
@@ -219,6 +286,7 @@ function cornerPosition() {
 
 function createWindow() {
   const { x, y } = cornerPosition()
+  const { w: W, h: H } = sizePx()
   win = new BrowserWindow({
     x,
     y,
@@ -297,6 +365,9 @@ ipcMain.on('monet:context-menu', () => {
       label: 'Read my screen — OCR fallback (test)',
       click: () => testRead(screenread.readOCR),
     },
+    { type: 'separator' },
+    { label: 'Size', submenu: sizeMenuItems() },
+    { type: 'separator' },
     { label: 'Reload', click: () => win && win.reload() },
     { label: 'Hide', click: () => win && win.hide() },
     { type: 'separator' },
@@ -315,6 +386,7 @@ app.whenReady().then(() => {
   // menu shows the right state. Set the key on demand via the tray (🎨 Monet → Set Anthropic
   // API key…) — we don't auto-pop the paste window on launch (it nagged every start).
   apiKey = loadKey()
+  viewScale = loadViewScale() // restore the last chosen size before the window is sized
 
   createWindow()
   buildTray()

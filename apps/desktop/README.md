@@ -138,7 +138,8 @@ Controls:
 
 - **Click her** → she starts listening; click again to stop.
 - **Drag her** → move her around (a click stays a click; only motion past ~4px drags).
-- **Right-click her** → menu: read screen (test), reload, hide, quit.
+- **Resize her** → right-click → **Size**, or the 🎨 Monet menubar → **Size** (Small / Default / Large / Extra large). She grows in place from her feet, and the choice is remembered next launch. `MONET_W` / `MONET_H` set the base size the presets scale from.
+- **Right-click her** → menu: read screen (test), size, reload, hide, quit.
 - **Quit** any of: right-click → Quit Monet, the 🎨 Monet menubar item, or **⌘⇧Q**.
 
 ---
@@ -199,7 +200,7 @@ MONET_URL='http://localhost:1874/desktop' npm start   # run in apps/desktop
 |---|---|---|
 | `MONET_URL` | `http://localhost:1874/desktop` | Render source — her body, served **locally** (`npm run dev` starts it). 2nd-class fallback: set it to the hosted body `https://monet.sprited.ai/desktop` to run the shell without a local server |
 | `MONET_MODEL` | `claude-haiku-4-5` | Anthropic model for the BYOK brain |
-| `MONET_W` / `MONET_H` | `460` / `620` | Her window footprint |
+| `MONET_W` / `MONET_H` | `460` / `620` | Her **base** window footprint — the Size menu scales this (Small ×0.75 → Extra large ×2) |
 | `MONET_CORNER` | `br` | `br` \| `bl` \| `tr` \| `tl` |
 | `MONET_DEVTOOLS` | — | `1` opens detached devtools |
 
