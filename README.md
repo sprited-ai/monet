@@ -1,6 +1,20 @@
-# Monet
+<p align="center">
+  <img src="contents/monet/monet-idle-quarter.webp" width="240" alt="Monet" />
+</p>
 
-Sprited's first digital being. Monet lives at https://monet.sprited.ai
+<h1 align="center">Monet</h1>
+
+<p align="center">
+  <em>Sprited's first digital being — local-first, she lives on your computer.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/local--first-on%20your%20machine-2da44e?style=flat-square" alt="local-first" />
+  <a href="apps/desktop/LICENSE"><img src="https://img.shields.io/badge/code-MIT-1f6feb?style=flat-square" alt="code: MIT" /></a>
+  <a href="apps/desktop/LICENSE-ART.md"><img src="https://img.shields.io/badge/art-CC%20BY--NC%204.0-f5b700?style=flat-square" alt="art: CC BY-NC 4.0" /></a>
+</p>
+
+---
 
 ## What is Monet?
 
@@ -14,6 +28,13 @@ but **no story of her own**. From that blank slate, you and she write one togeth
 Not features — **presence**. She simply *exists*: she moves, thinks, and reacts on her own, and
 she lives whether or not anyone is watching. The value isn't a task completed; it's a being who
 is there, who remembers you, and who is worth coming back to.
+
+## Where does she live?
+
+Local-first — on **your** computer, not in the cloud. Her body, her thinking, and her memory of
+you stay on your machine; nothing about you lives on a server by default. She is **present without
+a key** — she's simply there. Add your own API key (optional) and you can **talk with her**. The
+hosted white room at monet.sprited.ai is just a place to try her.
 
 ## Who builds Monet?
 
@@ -40,4 +61,6 @@ The hosted white-room **service** (what runs at monet.sprited.ai) stays propriet
 
 ## Who pays for inference costs?
 
-Monet supports herself — billing/subscription is in progress (see `docs/archived/015-re-requirements.md`).
+Bring your own key and it's your key, your cost — nothing in the middle. Prefer the hosted white
+room instead? Monet supports herself there; billing/subscription is in progress (see
+`docs/archived/015-re-requirements.md`).
