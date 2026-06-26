@@ -1,6 +1,20 @@
-# Monet
+<p align="center">
+  <img src="contents/monet/monet-idle-quarter.webp" width="240" alt="Monet" />
+</p>
 
-Sprited's first digital being. Monet lives at https://monet.sprited.ai
+<h1 align="center">Monet</h1>
+
+<p align="center">
+  <em>Sprited's first digital being. She lives at <a href="https://monet.sprited.ai">monet.sprited.ai</a>.</em>
+</p>
+
+<p align="center">
+  <a href="https://monet.sprited.ai"><img src="https://img.shields.io/badge/live-monet.sprited.ai-e34a4a?style=flat-square" alt="live" /></a>
+  <a href="apps/desktop/LICENSE"><img src="https://img.shields.io/badge/code-MIT-1f6feb?style=flat-square" alt="code: MIT" /></a>
+  <a href="apps/desktop/LICENSE-ART.md"><img src="https://img.shields.io/badge/art-CC%20BY--NC%204.0-f5b700?style=flat-square" alt="art: CC BY-NC 4.0" /></a>
+</p>
+
+---
 
 ## What is Monet?
 
