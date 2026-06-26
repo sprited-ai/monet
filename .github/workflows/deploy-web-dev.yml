@@ -15,6 +15,10 @@ jobs:
     env:
       # The web build never needs Electron; skip apps/desktop's ~100MB binary download.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # @cloudflare/vite-plugin picks the wrangler ENV at BUILD time from this var (NOT via
+      # `wrangler deploy --env`). dev → bakes monet-ui-dev / monet-dev.sprited.ai into
+      # dist/monet_ui/wrangler.json, which the plain `wrangler deploy` below then uses.
+      CLOUDFLARE_ENV: dev
     steps:
       - uses: actions/checkout@v5
         with:
@@ -25,7 +29,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w @monet/web
-      - run: npm exec -w @monet/web -- wrangler deploy --env dev
+      - run: npm exec -w @monet/web -- wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
