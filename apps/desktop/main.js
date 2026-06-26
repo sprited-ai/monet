@@ -239,12 +239,17 @@ function buildTray() {
 }
 
 function cornerPosition() {
-  const { x, y, width, height } = screen.getPrimaryDisplay().workArea
-  const left = CORNER.endsWith('l') ? x + MARGIN : x + width - W - MARGIN
-  // Bottom corners dock FLUSH to the work-area bottom (no gap) so Monet stands on the screen's
-  // bottom edge — paired with Renderer.overlayLiftPx, her soles sit right on that edge (grounded,
-  // not floating). Top corners keep the inset.
-  const top = CORNER.startsWith('t') ? y + MARGIN : y + height - H
+  const display = screen.getPrimaryDisplay()
+  const wa = display.workArea // excludes the menu bar + Dock
+  const b = display.bounds // the full physical display (the region UNDER the Dock too)
+  // Horizontal + top insets live in the work area (clear of the menu bar). The BOTTOM uses the full
+  // display bounds, not the work area, so she stands on the PHYSICAL screen bottom rather than
+  // floating above the Dock. Renderer.overlayLiftPx un-clips her soles within the window, so her feet
+  // land right on that bottom edge. She's docked bottom-LEFT and floats BELOW the Dock z-order
+  // (level 'floating'); with a centered Dock there's no horizontal overlap, so the Dock never covers
+  // her. If your Dock is left-positioned or very wide it can clip her — move MONET_CORNER or the Dock.
+  const left = CORNER.endsWith('l') ? wa.x + MARGIN : wa.x + wa.width - W - MARGIN
+  const top = CORNER.startsWith('t') ? wa.y + MARGIN : b.y + b.height - H
   return { x: Math.round(left), y: Math.round(top) }
 }
 
