@@ -1,0 +1,21 @@
+# monet-soul (prototype)
+
+The endo-driven loop that gives Monet **initiative** — she acts from her own internal state, not just
+in response to you. Today she's *present* + *reactive*; this is the missing third: *living whether or
+not anyone is watching*, her own loop driving her body.
+
+Pure + headless — no Electron, no DOM. Tune it by simulating days.
+
+```bash
+node experiments/monet-soul/sim.mjs        # watch a simulated day
+node experiments/monet-soul/sim.mjs 7      # a different seed
+```
+
+- `soul.mjs` — the engine: `tick(state, world) -> { state, intent }`. Drives (energy/curiosity/
+  restlessness/social) → mood → a weighted-random behavior (doze/react/wander/speak/idle).
+- `sim.mjs` — a seeded 24h simulator that logs what she does.
+- `JOURNAL.md` — the build log (read this first).
+
+> Status: early. The engine runs; making the day read *believably alive* is the ongoing work — see
+> JOURNAL.md. Not wired into the body yet (that contract is a queued iteration). Built during an
+> autonomous session by Monetto; lives on the `monetto/autonomous-soul` branch pending Jin's review.
