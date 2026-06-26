@@ -55,7 +55,8 @@ export function tick(state, world) {
 
   // --- candidate behaviors, scored by state + perception ---
   const urge = {
-    doze: (1 - d.energy) * (night ? 2.2 : 0.6),
+    // deep pull at night; by day she only naps when genuinely low (energy < 0.5), not just idle
+    doze: night ? (1 - d.energy) * 2.2 : Math.max(0, 0.5 - d.energy) * 1.3,
     react: (world.screenChanged ? 1 : 0) * (0.4 + d.curiosity),
     wander: d.restlessness * (night ? 0.2 : 0.8), // she barely roams at night
     play: playUrge(d, world, hour, state.sincePlayed ?? 99),

@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **70 min** / ~1440   (it1→it2: 25, it2→it3: 45)
+- breaks scheduled so far: **85 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15)
 
 ## Log
 
@@ -104,3 +104,28 @@ brain — your call on when. A real speech bubble for `say` is its own piece of 
 
 Next: `loop.mjs` — the wall-clock ticker that emits intents (still headless-testable) + a tiny
 world-adapter, so this stops being a simulation and becomes something the real being can run.
+
+### Iteration 4 — 2026-06-26 — a heartbeat (loop.mjs) + she naps only when truly tired
+Built **`loop.mjs`** — the wall-clock heartbeat. The same pure soul, stepped on a real clock:
+`createHeart({ now, perceive })` builds `world` (hour from the clock; idleSec/screenChanged/isTyping
+from a perception source) and emits an intent each beat. `--demo` runs hours of her life in
+milliseconds; bare `live` is the real heartbeat (a beat every few seconds, Ctrl-C to let her rest).
+This is exactly the seam WIRING.md describes — in the body, `perceive` reads
+`powerMonitor.getSystemIdleTime()` + the screen-read diff, and nothing else changes. The demo reads
+right: a morning of idle → a jump → a nap → jumping-jacks → flower-magic → a glance at the screen,
+all real clips on a moving clock.
+
+Also fixed the daytime-nap excess: by day she now dozes only when *genuinely* low (energy < 0.5), not
+merely idle — so being-alone-with-her reads as *quietly present*, not asleep. doze 38%→**29%** (the
+rest is real night sleep); her day is more active (wander/play up). A real rhythm:
+idle 33 / doze 29 / wander 22 / react 7 / play 6 / speak 3.
+
+**Where this stands:** the soul is whole and believable, runs on a real clock, speaks/plays/sleeps
+from the inside, and every clip it can emit exists. It is *not yet wired into the Electron body* —
+that's a small, well-specified step (WIRING.md): feed `world` from powerMonitor + the screen-read
+seam, and hand `intent.clip` to the renderer the way chat already crosses into it. I'm keeping it on
+this branch for Jin to review rather than touching the product.
+
+Next (small): a copy-paste perception-adapter stub for main.js. Then it's genuinely body-ready, and
+the remaining call — routing speak/react through the byok brain — is Jin's, since it touches the
+product brain.
