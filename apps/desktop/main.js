@@ -291,11 +291,11 @@ ipcMain.on('monet:context-menu', () => {
     { type: 'separator' },
     {
       label: 'Read my screen — Accessibility (test)',
-      click: () => testRead(readScreenText),
+      click: () => testRead(screenread.readAccessibility),
     },
     {
       label: 'Read my screen — OCR fallback (test)',
-      click: () => testRead(readViaOCR),
+      click: () => testRead(screenread.readOCR),
     },
     { label: 'Reload', click: () => win && win.reload() },
     { label: 'Hide', click: () => win && win.hide() },
