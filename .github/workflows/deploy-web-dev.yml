@@ -1,0 +1,31 @@
+name: deploy-web-dev
+
+# Push to dev that touches apps/web/ → build & deploy staging to monet-dev.sprited.ai.
+# Mirrors deploy-web.yml (prod, main → monet.sprited.ai) but targets the `dev` wrangler env.
+
+on:
+  push:
+    branches: [dev]
+    paths: ['apps/web/**']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # The web build never needs Electron; skip apps/desktop's ~100MB binary download.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: apps
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @monet/web
+      - run: npm exec -w @monet/web -- wrangler deploy --env dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

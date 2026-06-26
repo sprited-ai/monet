@@ -35,5 +35,31 @@
     "logs": {
       "enabled": true
     }
+  },
+  // dev / staging environment. Push to the `dev` branch (paths apps/web/**) auto-deploys
+  // here via .github/workflows/deploy-web-dev.yml → `wrangler deploy --env dev`.
+  // Separate worker + its own custom domain (monet-dev.sprited.ai). For now it shares the
+  // prod R2 + D1 (content is identical; memory pollution is negligible pre-launch) —
+  // split off a `monet-memory-dev` D1 later (needs `wrangler d1 create` on the company acct).
+  "env": {
+    "dev": {
+      "name": "monet-ui-dev",
+      "routes": [{ "pattern": "monet-dev.sprited.ai", "custom_domain": true }],
+      "assets": {
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*", "/contents", "/contents/*"]
+      },
+      "r2_buckets": [
+        { "binding": "CONTENTS", "bucket_name": "monet-contents" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "monet-memory",
+          "database_id": "f0f0901b-6ca8-46b9-b040-b8331d0d8713"
+        }
+      ],
+      "observability": { "logs": { "enabled": true } }
+    }
   }
 }
