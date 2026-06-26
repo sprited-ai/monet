@@ -56,9 +56,9 @@ The whole reason this is BYOK and open source:
 
 - **Screen reading is on-device.** Accessibility reads text without ever capturing pixels. The
   OCR fallback runs Apple Vision locally and deletes the frame immediately. Nothing is uploaded.
-- **Your key → the model, full stop.** It's stored locally on your Mac (macOS Keychain via
-  Electron `safeStorage`), held only in the main process, and sent only to `api.anthropic.com`.
-  The hosted page never sees it.
+- **Your key → the model, full stop.** It's stored locally on your machine (Electron `safeStorage`
+  — macOS Keychain / Windows DPAPI / Linux libsecret; a `0600` file if the OS can't encrypt), held
+  only in the main process, and sent only to `api.anthropic.com`. The hosted page never sees it.
 - **Nothing of yours hits our servers.** We serve her *body* (static render assets). Your
   conversation and your screen text bypass us entirely and go straight to Anthropic with your key.
 - **Auditable.** It's all here. The seam that reroutes chat to your key is a few lines of
@@ -103,17 +103,30 @@ That's the whole flow. Nothing hidden.
 
 ## Quick start
 
-Requires **macOS** and **Node 18+**. Xcode command-line tools (`swiftc`) are optional — without
-them the screen-read helpers just don't compile and that feature stays off; everything else works.
+**Cross-platform by design.** The shell (Electron), her render, and the BYOK brain run on **macOS,
+Windows, and Linux** — needs **Node 18+**. The one OS-specific capability is *screen reading*: macOS
+is implemented today; on Windows/Linux everything else runs and screen-read is an open per-platform
+plugin (see [`screenread/`](./screenread/)). On macOS, Xcode CLI tools (`swiftc`) are optional —
+without them the screen-read helpers just don't build and that feature stays off.
+
+| Platform | Shell + render + BYOK brain | Screen reading |
+|---|---|---|
+| **macOS** | ✅ | ✅ Accessibility + Apple Vision OCR |
+| **Windows** | ✅ | ⬜ open plugin point |
+| **Linux** | ✅ (click-through is all-or-nothing¹) | ⬜ open plugin point |
+
+¹ Linux ignores Electron's `setIgnoreMouseEvents({ forward })`, so the per-pixel silhouette hit-test can't run there yet.
 
 ```bash
 git clone <this repo>
-cd apps/desktop
-npm install     # also compiles the Swift screen-read helpers (skipped if no swiftc)
-npm start
+cd monet
+npm install     # hoists Electron + compiles the Swift screen-read helpers (skipped if no swiftc)
+npm run dev     # (or npm start) — one command: boots her body locally + the desktop shell
 ```
 
-Monet appears docked in the bottom-right corner, floating over everything.
+Monet appears docked in a corner, floating over everything. **Local-first:** `npm run dev` runs her
+whole body on *your* machine (a local render server + the shell) — nothing of ours is in the loop.
+The hosted body at `monet.sprited.ai` is only a 2nd-class fallback (see `MONET_URL` below).
 
 Then give her a brain:
 
@@ -184,7 +197,7 @@ MONET_URL='http://localhost:1874/desktop' npm start   # run in apps/desktop
 
 | Var | Default | Meaning |
 |---|---|---|
-| `MONET_URL` | `http://localhost:1874/desktop` | Render source; the `/desktop` route (her body in overlay mode). Point at `https://monet.sprited.ai/desktop` once deployed |
+| `MONET_URL` | `http://localhost:1874/desktop` | Render source — her body, served **locally** (`npm run dev` starts it). 2nd-class fallback: set it to the hosted body `https://monet.sprited.ai/desktop` to run the shell without a local server |
 | `MONET_MODEL` | `claude-haiku-4-5` | Anthropic model for the BYOK brain |
 | `MONET_W` / `MONET_H` | `460` / `620` | Her window footprint |
 | `MONET_CORNER` | `br` | `br` \| `bl` \| `tr` \| `tl` |
@@ -213,8 +226,8 @@ console.
 **Working (verified):**
 - Overlay render — transparent canvas, clean silhouette, no edge halo. Alpha probe: body/head =
   `1.0`, all corners = `0.0`.
-- Framing — a small overlay-only lift (`Renderer.overlayLiftPx`, 4 CSS px) un-clips her soles so
-  her feet sit *on* the bottom edge (grounded, not floating).
+- Framing — an overlay-only camera drop (`Renderer.overlayCamDrop`, 0.2 world ≈ 50 px down) pans the
+  view onto her feet so her soles sit just above the window's bottom edge (grounded, not floating).
 - `__monetAlphaAt` silhouette hit-test driving click-through (contextIsolation off so the preload
   can read it).
 - Press semantics: click → `toggleHandsFree`; drag → move; right-click → menu.
