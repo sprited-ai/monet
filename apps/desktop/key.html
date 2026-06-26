@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Monet — Anthropic API key</title>
+<style>
+  body { font: 13px -apple-system, system-ui, sans-serif; margin: 18px; color: #222; }
+  h3 { margin: 0 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; margin: 10px 0; font: inherit; }
+  button { padding: 6px 14px; font: inherit; }
+  small { color: #888; display: block; margin-top: 8px; line-height: 1.4; }
+</style>
+<h3>Paste your Anthropic API key</h3>
+<input id="k" type="password" placeholder="sk-ant-…" autofocus />
+<div>
+  <button id="s">Save</button>
+  <small>Stored locally on this Mac (encrypted via the macOS Keychain when available).<br />
+  It only ever leaves to api.anthropic.com — the web page never sees it.</small>
+</div>
+<script>
+  // This window loads only our own trusted local file, with nodeIntegration on, so it can
+  // require('electron') directly. The key is sent to main and never touches the hosted page.
+  const { ipcRenderer } = require('electron')
+  const save = () => ipcRenderer.send('monet:set-key', document.getElementById('k').value)
+  document.getElementById('s').onclick = save
+  document.getElementById('k').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') save()
+  })
+</script>

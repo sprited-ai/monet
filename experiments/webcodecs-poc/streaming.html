@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebCodecs STREAMING erase — mobile-realistic (monet-talk-2)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 14px ui-monospace, monospace; background: #111; color: #ddd; }
+  .wrap { padding: 16px; }
+  canvas { background: #000; border: 1px solid #333; width: 300px; height: 300px; }
+  .row { margin: 10px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { font: inherit; padding: 8px 14px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 6px; }
+  button.on { background: #2a5; color: #021; }
+  pre { background: #181818; padding: 12px; border: 1px solid #333; border-radius: 6px; line-height: 1.6; font-size: 13px; }
+  .big { font-size: 30px; color: #6e6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2 style="margin:0 0 4px">WebCodecs STREAMING erase — production scenario</h2>
+  <div style="color:#888;margin-bottom:10px">decode-as-you-go (NOT full-cache) · loops · this is what mobile would run</div>
+  <canvas id="cv" width="320" height="320"></canvas>
+  <div class="row">
+    <button id="erase" class="on">erase</button>
+    <button id="off">off</button>
+    <button id="go">▶ start</button>
+  </div>
+  <pre id="log">loading…</pre>
+  <div style="color:#888">Watch: FPS should hold ~24, "frames in flight" (live VideoFrames = memory) should stay tiny (single digits). If it stays smooth on your iPhone, runtime compositing is mobile-viable.</div>
+</div>
+
+<script type="module">
+import MP4Box from 'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/+esm'
+
+const FPS = 24
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d')
+const logEl = document.getElementById('log')
+let mode = 'erase', chunks = [], config = null, mouth = null
+
+// ---- demux ----
+function description(file, track) {
+  const trak = file.getTrackById(track.id)
+  for (const e of trak.mdia.minf.stbl.stsd.entries) {
+    const b = e.avcC || e.hvcC || e.vpcC || e.av1C
+    if (b) { const s = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN); b.write(s); return new Uint8Array(s.buffer, 8) }
+  }
+}
+async function demux(url) {
+  const file = MP4Box.createFile(); const out = []
+  const done = new Promise((res, rej) => {
+    file.onError = rej
+    file.onReady = (info) => {
+      const t = info.videoTracks[0]
+      config = { codec: t.codec, codedWidth: t.video.width, codedHeight: t.video.height, description: description(file, t) }
+      file.setExtractionOptions(t.id, null, { nbSamples: t.nb_samples })
+      file.onSamples = (id, u, samples) => {
+        for (const s of samples) out.push(new EncodedVideoChunk({ type: s.is_sync ? 'key' : 'delta', timestamp: (s.cts / s.timescale) * 1e6, duration: (s.duration / s.timescale) * 1e6, data: s.data }))
+        if (out.length >= t.nb_samples) res()
+      }
+      file.start()
+    }
+  })
+  const buf = await (await fetch(url)).arrayBuffer(); buf.fileStart = 0; file.appendBuffer(buf); file.flush()
+  await done; return out
+}
+
+// ---- erase draw (top RGB half + dilated mouth fill) ----
+function draw(frame, i) {
+  ctx.clearRect(0, 0, cv.width, cv.height)
+  ctx.drawImage(frame, 0, 0, frame.codedWidth, frame.codedHeight / 2, 0, 0, cv.width, cv.height)
+  const rec = mouth?.frames?.[i]
+  if (rec?.poly && mode === 'erase') {
+    let pts = rec.poly.map(([x, y]) => [x * cv.width, y * cv.height])
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+    pts = pts.map(([x, y]) => [cx + (x - cx) * 2.4, cy + (y - cy) * 2.4])
+    ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath()
+    ctx.fillStyle = `rgb(${rec.skin[0]},${rec.skin[1]},${rec.skin[2]})`; ctx.fill()
+  }
+}
+
+// ---- streaming playback: decode just ahead, present at 24fps, close after draw ----
+let decoder = null, queue = [], feedIdx = 0, playing = false
+let nextIdx = 0, t0 = 0, peakInFlight = 0, framesShown = 0, fpsN = 0, lastFps = 0, fpsVal = 0, loops = 0
+
+function newDecoder() {
+  decoder = new VideoDecoder({
+    output: (f) => { queue.push(f); peakInFlight = Math.max(peakInFlight, queue.length); },
+    error: (e) => (logEl.textContent = 'decoder error: ' + e),
+  })
+  decoder.configure(config)
+  feedIdx = 0
+}
+function pump() { // keep the decoder's input queue shallow → low memory
+  while (feedIdx < chunks.length && decoder.decodeQueueSize < 6) decoder.decode(chunks[feedIdx++])
+}
+function loop(now) {
+  if (!playing) return
+  const want = Math.floor(((now - t0) / 1000) * FPS) // target presentation index this instant
+  while (queue.length && nextIdx <= want) {
+    const f = queue.shift()
+    draw(f, nextIdx)
+    f.close()                 // free the decoded frame immediately → memory stays flat
+    nextIdx++; framesShown++
+    if (nextIdx >= chunks.length) { // loop: reset decoder back to the keyframe
+      loops++; nextIdx = 0; t0 = now
+      try { decoder.close() } catch {}
+      queue.forEach((q) => q.close()); queue = []
+      newDecoder()
+      break
+    }
+  }
+  pump()
+  fpsN++
+  if (now - lastFps >= 500) { fpsVal = Math.round((fpsN * 1000) / (now - lastFps)); fpsN = 0; lastFps = now; report() }
+  requestAnimationFrame(loop)
+}
+function report() {
+  const w = config.codedWidth, h = config.codedHeight
+  const mem = performance.memory ? `\nJS heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(0)} MB` : '\n(performance.memory unavailable — iOS: judge by smoothness)'
+  logEl.textContent =
+    `▶ streaming (decode-as-you-go), loop #${loops}\n` +
+    `FPS: ${fpsVal}  (target 24)\n` +
+    `frames in flight (live VideoFrames): ${queue.length}   peak: ${peakInFlight}\n` +
+    `→ memory ≈ ${(((queue.length || 1) * w * h * 1.5) / 1e6).toFixed(1)} MB of decoded frames (vs 149 MB if full-cached)\n` +
+    `frames shown: ${framesShown}   decoder input queue: ${decoder.decodeQueueSize}` +
+    mem
+}
+
+document.getElementById('go').onclick = (e) => {
+  playing = !playing
+  e.target.textContent = playing ? '⏸ stop' : '▶ start'
+  e.target.classList.toggle('on', playing)
+  if (playing) { nextIdx = 0; framesShown = 0; peakInFlight = 0; loops = 0; queue.forEach((q) => q.close()); queue = []; if (decoder) try { decoder.close() } catch {}; newDecoder(); pump(); t0 = performance.now(); lastFps = t0; requestAnimationFrame(loop) }
+}
+document.getElementById('erase').onclick = (e) => { mode = 'erase'; e.target.classList.add('on'); document.getElementById('off').classList.remove('on') }
+document.getElementById('off').onclick = (e) => { mode = 'off'; e.target.classList.add('on'); document.getElementById('erase').classList.remove('on') }
+
+// rAF-free benchmark: decode every frame with backpressure, closing each immediately —
+// peak concurrent live VideoFrames = the streaming memory bound (runs even in a bg tab).
+async function benchMemory() {
+  let peak = 0, alive = 0
+  const dec = new VideoDecoder({ output: (f) => { alive++; peak = Math.max(peak, alive); f.close(); alive-- }, error: () => {} })
+  dec.configure(config)
+  const t0 = performance.now()
+  for (const c of chunks) { dec.decode(c); if (dec.decodeQueueSize > 6) await new Promise((r) => setTimeout(r, 0)) }
+  await dec.flush(); dec.close()
+  const ms = performance.now() - t0
+  const w = config.codedWidth, h = config.codedHeight
+  return { peak, ms, perFrame: ms / chunks.length, peakMB: (peak * w * h * 1.5) / 1e6 }
+}
+
+;(async () => {
+  if (!('VideoDecoder' in window)) { logEl.textContent = '❌ WebCodecs VideoDecoder NOT available in this browser'; return }
+  chunks = await demux('./monet-talk-2.mp4')
+  mouth = await (await fetch('./monet-talk-2.mouth.json')).json()
+  logEl.textContent = `✅ ready — ${chunks.length} chunks (${(chunks.reduce((s, c) => s + c.byteLength, 0) / 1e3).toFixed(0)} KB). running memory bench…`
+  const b = await benchMemory()
+  logEl.textContent =
+    `✅ ready — ${chunks.length} chunks (${(chunks.reduce((s, c) => s + c.byteLength, 0) / 1e3).toFixed(0)} KB encoded, in memory)\n\n` +
+    `STREAMING MEMORY BENCH (decode-all w/ backpressure, free each immediately):\n` +
+    `  peak concurrent live VideoFrames: ${b.peak}\n` +
+    `  → streaming memory bound ≈ ${b.peakMB.toFixed(1)} MB  (vs 149 MB if full-cached)\n` +
+    `  decode: ${b.ms.toFixed(0)} ms total, ${b.perFrame.toFixed(2)} ms/frame (HW)\n\n` +
+    `Press ▶ start for live playback (FPS shows only in a FOREGROUND tab — rAF is throttled when hidden).`
+})()
+</script>
+</body>
+</html>

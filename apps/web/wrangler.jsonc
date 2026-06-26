@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "monet-ui",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./api/index.ts",
+  // Push to main (paths apps/web/**) auto-deploys here (see .github/workflows/deploy-web.yml).
+  // On deploy, wrangler provisions this custom domain (DNS + cert) on the sprited.ai zone.
+  // Everything lives at monet.sprited.ai now (the whiteroom + /editor + /preview).
+  "routes": [{ "pattern": "monet.sprited.ai", "custom_domain": true }],
+  // The Cloudflare Vite plugin auto-populates assets.directory with the client
+  // build output on `vite build`; do not set it manually.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    // Static assets (incl. Vite's own /assets/ bundle) are served directly;
+    // only /api/* and the /contents resource hit the Hono Worker.
+    "run_worker_first": ["/api/*", "/contents", "/contents/*"]
+  },
+  // Animations + stills, mirrored from contents/. In prod the Worker reads this
+  // bucket; in local dev a Vite middleware serves contents/ off disk instead.
+  "r2_buckets": [
+    { "binding": "CONTENTS", "bucket_name": "monet-contents" }
+  ],
+  // Per-user memory (docs/015 moat). v0: anon identity (client-minted uuid) keyed
+  // here; Monet remembers each person across visits. Schema in ./migrations.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "monet-memory",
+      "database_id": "f0f0901b-6ca8-46b9-b040-b8331d0d8713",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
+  }
+}

@@ -1,0 +1,263 @@
+{
+  "2": {
+    "inputs": {
+      "image": "monet-idle-quarter.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "2",
+        0
+      ],
+      "source": [
+        "7",
+        0
+      ],
+      "mask": [
+        "2",
+        1
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Image Composite Masked"
+    }
+  },
+  "7": {
+    "inputs": {
+      "width": [
+        "10",
+        0
+      ],
+      "height": [
+        "10",
+        1
+      ],
+      "batch_size": 1,
+      "color": 8421504
+    },
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "Empty Image"
+    }
+  },
+  "8": {
+    "inputs": {
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Get Image Size"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "Scene 1: She looks up a bit, full_body, solid_background, static_camera\nScene 2: She enjoys it, full_body, solid_background,static_camera\nScene 3: She looks down"
+    },
+    "class_type": "Text Multiline",
+    "_meta": {
+      "title": "Text Multiline"
+    }
+  },
+  "13": {
+    "inputs": {
+      "video": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Get Video Components"
+    }
+  },
+  "14": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "fps": [
+        "13",
+        2
+      ],
+      "lossless": true,
+      "quality": 90,
+      "method": "default",
+      "images": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SaveAnimatedWEBP",
+    "_meta": {
+      "title": "SaveAnimatedWEBP"
+    }
+  },
+  "16": {
+    "inputs": {
+      "frame_rate": [
+        "13",
+        2
+      ],
+      "loop_count": 0,
+      "filename_prefix": "AnimateDiff",
+      "format": "video/webm",
+      "pix_fmt": "yuva420p",
+      "crf": 20,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "17": {
+    "inputs": {
+      "model": "BiRefNet_toonout",
+      "process_resolution": 0,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": true,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "BiRefNetRMBG",
+    "_meta": {
+      "title": "BiRefNet Remove Background (RMBG)"
+    }
+  },
+  "19": {
+    "inputs": {
+      "model": "seedance-1-5-pro-251215",
+      "prompt": [
+        "12",
+        0
+      ],
+      "resolution": "480p",
+      "aspect_ratio": "adaptive",
+      "duration": 5,
+      "seed": 389100794,
+      "camera_fixed": true,
+      "watermark": false,
+      "generate_audio": false,
+      "first_frame": [
+        "6",
+        0
+      ],
+      "last_frame": [
+        "21",
+        0
+      ]
+    },
+    "class_type": "ByteDanceFirstLastFrameNode",
+    "_meta": {
+      "title": "ByteDance First-Last-Frame to Video"
+    }
+  },
+  "20": {
+    "inputs": {
+      "image": "monet-idle-quarter.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "21": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "20",
+        0
+      ],
+      "source": [
+        "7",
+        0
+      ],
+      "mask": [
+        "20",
+        1
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Image Composite Masked"
+    }
+  },
+  "22": {
+    "inputs": {
+      "images": [
+        "21",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "23": {
+    "inputs": {
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video-preview": "",
+      "video": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "24": {
+    "inputs": {
+      "left": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "feathering": 40
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "Pad Image for Outpainting"
+    }
+  }
+}

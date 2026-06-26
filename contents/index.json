@@ -1,0 +1,657 @@
+{
+ "items": {
+  "monet-angry-1": {
+   "key": "monet/monet-angry-1.mp4",
+   "name": "monet-angry-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-angry-2": {
+   "key": "monet/monet-angry-2.mp4",
+   "name": "monet-angry-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-angry-large-1": {
+   "key": "monet/monet-angry-large-1.mp4",
+   "name": "monet-angry-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-angry-large-2": {
+   "key": "monet/monet-angry-large-2.mp4",
+   "name": "monet-angry-large-2",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-angry-large": {
+   "key": "monet/monet-angry-large.webp",
+   "name": "monet-angry-large",
+   "framing": "large"
+  },
+  "monet-back-to-front-1": {
+   "key": "monet/monet-back-to-front-1.mp4",
+   "name": "monet-back-to-front-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-back-walk-wide-1": {
+   "key": "monet/monet-back-walk-wide-1.mp4",
+   "name": "monet-back-walk-wide-1",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-bazooka-1": {
+   "key": "monet/monet-bazooka-1.mp4",
+   "name": "monet-bazooka-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-brush-large-2": {
+   "key": "monet/monet-brush-large-2.webp",
+   "name": "monet-brush-large-2",
+   "framing": "large"
+  },
+  "monet-cast-magic-1": {
+   "key": "monet/monet-cast-magic-1.mp4",
+   "name": "monet-cast-magic-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cast-magic-2": {
+   "key": "monet/monet-cast-magic-2.mp4",
+   "name": "monet-cast-magic-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cast-magic-3": {
+   "key": "monet/monet-cast-magic-3.mp4",
+   "name": "monet-cast-magic-3",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cast-magic-large-1": {
+   "key": "monet/monet-cast-magic-large-1.mp4",
+   "name": "monet-cast-magic-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-chill-large-1": {
+   "key": "monet/monet-chill-large-1.mp4",
+   "name": "monet-chill-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cough-large-1": {
+   "key": "monet/monet-cough-large-1.mp4",
+   "name": "monet-cough-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cough-large-2": {
+   "key": "monet/monet-cough-large-2.mp4",
+   "name": "monet-cough-large-2",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cough-large": {
+   "key": "monet/monet-cough-large.webp",
+   "name": "monet-cough-large",
+   "framing": "large"
+  },
+  "monet-cry-large-1": {
+   "key": "monet/monet-cry-large-1.mp4",
+   "name": "monet-cry-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-cry-large-2": {
+   "key": "monet/monet-cry-large-2.mp4",
+   "name": "monet-cry-large-2",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-dance-large-1": {
+   "key": "monet/monet-dance-large-1.mp4",
+   "name": "monet-dance-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-doze-off-1": {
+   "key": "monet/monet-doze-off-1.webp",
+   "name": "monet-doze-off-1",
+   "framing": "regular"
+  },
+  "monet-doze-off-2": {
+   "key": "monet/monet-doze-off-2.webp",
+   "name": "monet-doze-off-2",
+   "framing": "regular"
+  },
+  "monet-doze-off-3": {
+   "key": "monet/monet-doze-off-3.webp",
+   "name": "monet-doze-off-3",
+   "framing": "regular"
+  },
+  "monet-doze-off": {
+   "key": "monet/monet-doze-off.mp4",
+   "name": "monet-doze-off",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-dozz-off-4": {
+   "key": "monet/monet-dozz-off-4.webp",
+   "name": "monet-dozz-off-4",
+   "framing": "regular"
+  },
+  "monet-drink-water-1": {
+   "key": "monet/monet-drink-water-1.mp4",
+   "name": "monet-drink-water-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-drink-water-large-1": {
+   "key": "monet/monet-drink-water-large-1.mp4",
+   "name": "monet-drink-water-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-dust": {
+   "key": "monet/monet-dust.mp4",
+   "name": "monet-dust",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-eat-bread": {
+   "key": "monet/monet-eat-bread.mp4",
+   "name": "monet-eat-bread",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-flower-magic-1": {
+   "key": "monet/monet-flower-magic-1.mp4",
+   "name": "monet-flower-magic-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-full-large": {
+   "key": "monet/monet-full-large.webp",
+   "name": "monet-full-large",
+   "framing": "large"
+  },
+  "monet-gets-angry-and-turns-back": {
+   "key": "monet/monet-gets-angry-and-turns-back.mp4",
+   "name": "monet-gets-angry-and-turns-back",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-greet-1": {
+   "key": "monet/monet-greet-1.mp4",
+   "name": "monet-greet-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 97,
+   "mouthRig": "talk"
+  },
+  "monet-happy-1": {
+   "key": "monet/monet-happy-1.mp4",
+   "name": "monet-happy-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-happy-2": {
+   "key": "monet/monet-happy-2.mp4",
+   "name": "monet-happy-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-headpat-loop": {
+   "key": "monet/monet-headpat-loop.mp4",
+   "name": "monet-headpat-loop",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 32,
+   "mouthRig": "talk"
+  },
+  "monet-idle-1": {
+   "key": "monet/monet-idle-1.mp4",
+   "name": "monet-idle-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-idle-2": {
+   "key": "monet/monet-idle-2.mp4",
+   "name": "monet-idle-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-idle-3": {
+   "key": "monet/monet-idle-3.mp4",
+   "name": "monet-idle-3",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-idle-front": {
+   "key": "monet/monet-idle-front.webp",
+   "name": "monet-idle-front",
+   "framing": "regular"
+  },
+  "monet-idle-large": {
+   "key": "monet/monet-idle-large.webp",
+   "name": "monet-idle-large",
+   "framing": "large"
+  },
+  "monet-idle-quarter-back": {
+   "key": "monet/monet-idle-quarter-back.webp",
+   "name": "monet-idle-quarter-back",
+   "framing": "regular"
+  },
+  "monet-idle-quarter": {
+   "key": "monet/monet-idle-quarter.webp",
+   "name": "monet-idle-quarter",
+   "framing": "regular"
+  },
+  "monet-idle-right-wide": {
+   "key": "monet/monet-idle-right-wide.webp",
+   "name": "monet-idle-right-wide",
+   "framing": "wide"
+  },
+  "monet-idle-small": {
+   "key": "monet/monet-idle-small.webp",
+   "name": "monet-idle-small",
+   "framing": "small"
+  },
+  "monet-idle-wide": {
+   "key": "monet/monet-idle-wide.webp",
+   "name": "monet-idle-wide",
+   "framing": "wide"
+  },
+  "monet-jump-large-1": {
+   "key": "monet/monet-jump-large-1.mp4",
+   "name": "monet-jump-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-jump-large-2": {
+   "key": "monet/monet-jump-large-2.mp4",
+   "name": "monet-jump-large-2",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-jump-large-3": {
+   "key": "monet/monet-jump-large-3.mp4",
+   "name": "monet-jump-large-3",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-jumping-jacks-large-1": {
+   "key": "monet/monet-jumping-jacks-large-1.mp4",
+   "name": "monet-jumping-jacks-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-jumping-jacks-large-2": {
+   "key": "monet/monet-jumping-jacks-large-2.mp4",
+   "name": "monet-jumping-jacks-large-2",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-light-dance-1": {
+   "key": "monet/monet-light-dance-1.mp4",
+   "name": "monet-light-dance-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-lookup-3": {
+   "key": "monet/monet-lookup-3.mp4",
+   "name": "monet-lookup-3",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-paint-large-1": {
+   "key": "monet/monet-paint-large-1.mp4",
+   "name": "monet-paint-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-pillow": {
+   "key": "monet/monet-pillow.webp",
+   "name": "monet-pillow",
+   "framing": "regular"
+  },
+  "monet-prepare-to-throw-wide-1": {
+   "key": "monet/monet-prepare-to-throw-wide-1.mp4",
+   "name": "monet-prepare-to-throw-wide-1",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-run-1": {
+   "key": "monet/monet-run-1.mp4",
+   "name": "monet-run-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-run-2": {
+   "key": "monet/monet-run-2.mp4",
+   "name": "monet-run-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-run-3": {
+   "key": "monet/monet-run-3.mp4",
+   "name": "monet-run-3",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-run-4": {
+   "key": "monet/monet-run-4.mp4",
+   "name": "monet-run-4",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-sad-large": {
+   "key": "monet/monet-sad-large.webp",
+   "name": "monet-sad-large",
+   "framing": "large"
+  },
+  "monet-scared-large-1": {
+   "key": "monet/monet-scared-large-1.mp4",
+   "name": "monet-scared-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-scared-large": {
+   "key": "monet/monet-scared-large.webp",
+   "name": "monet-scared-large",
+   "framing": "large"
+  },
+  "monet-shy-large": {
+   "key": "monet/monet-shy-large.webp",
+   "name": "monet-shy-large",
+   "framing": "large"
+  },
+  "monet-sick-large-2": {
+   "key": "monet/monet-sick-large-2.webp",
+   "name": "monet-sick-large-2",
+   "framing": "large"
+  },
+  "monet-sick-large": {
+   "key": "monet/monet-sick-large.webp",
+   "name": "monet-sick-large",
+   "framing": "large"
+  },
+  "monet-sinister-large": {
+   "key": "monet/monet-sinister-large.webp",
+   "name": "monet-sinister-large",
+   "framing": "large"
+  },
+  "monet-sit-1": {
+   "key": "monet/monet-sit-1.mp4",
+   "name": "monet-sit-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-sit-2": {
+   "key": "monet/monet-sit-2.mp4",
+   "name": "monet-sit-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-sit": {
+   "key": "monet/monet-sit.webp",
+   "name": "monet-sit",
+   "framing": "regular"
+  },
+  "monet-stands-up-1": {
+   "key": "monet/monet-stands-up-1.mp4",
+   "name": "monet-stands-up-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-stunt-wide-1": {
+   "key": "monet/monet-stunt-wide-1.mp4",
+   "name": "monet-stunt-wide-1",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-stunt-wide-2": {
+   "key": "monet/monet-stunt-wide-2.mp4",
+   "name": "monet-stunt-wide-2",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-talk-2": {
+   "key": "monet/monet-talk-2.mp4",
+   "name": "monet-talk-2",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-talk-happy-large-1": {
+   "key": "monet/monet-talk-happy-large-1.mp4",
+   "name": "monet-talk-happy-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-talk-large-1": {
+   "key": "monet/monet-talk-large-1.mp4",
+   "name": "monet-talk-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-talk-sad-stuff-large-1": {
+   "key": "monet/monet-talk-sad-stuff-large-1.mp4",
+   "name": "monet-talk-sad-stuff-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-throw-ball-wide": {
+   "key": "monet/monet-throw-ball-wide.mp4",
+   "name": "monet-throw-ball-wide",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-throw-wide-1": {
+   "key": "monet/monet-throw-wide-1.mp4",
+   "name": "monet-throw-wide-1",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-turn-twice-1": {
+   "key": "monet/monet-turn-twice-1.mp4",
+   "name": "monet-turn-twice-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-turns-back-to-front-1": {
+   "key": "monet/monet-turns-back-to-front-1.mp4",
+   "name": "monet-turns-back-to-front-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-turns": {
+   "key": "monet/monet-turns.mp4",
+   "name": "monet-turns",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-umbrella-in-large-1": {
+   "key": "monet/monet-umbrella-in-large-1.mp4",
+   "name": "monet-umbrella-in-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-umbrella-large-1": {
+   "key": "monet/monet-umbrella-large-1.mp4",
+   "name": "monet-umbrella-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-umbrella-large-2": {
+   "key": "monet/monet-umbrella-large-2.webp",
+   "name": "monet-umbrella-large-2",
+   "framing": "large"
+  },
+  "monet-umbrella-large": {
+   "key": "monet/monet-umbrella-large.webp",
+   "name": "monet-umbrella-large",
+   "framing": "large"
+  },
+  "monet-umbrella-out-large-1": {
+   "key": "monet/monet-umbrella-out-large-1.mp4",
+   "name": "monet-umbrella-out-large-1",
+   "framing": "large",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-wakes-up-1": {
+   "key": "monet/monet-wakes-up-1.mp4",
+   "name": "monet-wakes-up-1",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": false
+  },
+  "monet-walk": {
+   "key": "monet/monet-walk.mp4",
+   "name": "monet-walk",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-weird-backwards-dance-wide-1": {
+   "key": "monet/monet-weird-backwards-dance-wide-1.mp4",
+   "name": "monet-weird-backwards-dance-wide-1",
+   "framing": "wide",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  },
+  "monet-wind": {
+   "key": "monet/monet-wind.mp4",
+   "name": "monet-wind",
+   "framing": "regular",
+   "fps": 24.0,
+   "frames": 121,
+   "mouthRig": "talk"
+  }
+ }
+}

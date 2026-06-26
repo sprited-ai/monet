@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebCodecs frame-accurate erase PoC — monet-talk-2</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 13px ui-monospace, monospace; background: #111; color: #ddd; }
+  .wrap { display: flex; gap: 20px; padding: 16px; flex-wrap: wrap; }
+  canvas { background: #000; border: 1px solid #333; image-rendering: auto; }
+  .panel { min-width: 320px; }
+  .row { margin: 8px 0; display: flex; gap: 10px; align-items: center; }
+  input[type=range] { width: 360px; }
+  button { font: inherit; padding: 4px 10px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; cursor: pointer; }
+  button.on { background: #2a5; color: #021; border-color: #2a5; }
+  pre { background: #181818; padding: 10px; border: 1px solid #333; border-radius: 4px; white-space: pre-wrap; line-height: 1.5; }
+  .big { font-size: 22px; }
+  .k { color: #8be; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <canvas id="cv" width="480" height="480"></canvas>
+  </div>
+  <div class="panel">
+    <h2 style="margin:0 0 6px">WebCodecs erase PoC</h2>
+    <div style="color:#888">monet-talk-2 · H.264 640×1280 · 24fps · 121f · stacked-alpha (top = RGB)</div>
+
+    <div class="row">
+      <button id="mErase" class="on">erase</button>
+      <button id="mContour">contour</button>
+      <button id="mOff">off</button>
+    </div>
+    <div class="row">
+      <span class="big" id="frameLbl">0 / 0</span>
+    </div>
+    <div class="row">
+      <button id="play">▶ play</button>
+      <input id="slider" type="range" min="0" max="0" step="1" value="0" />
+    </div>
+
+    <pre id="log">loading…</pre>
+    <div style="color:#888;margin-top:8px">
+      WebCodecs draws frame[i] and the mouth polygon[i] together in one paint —
+      they are the same frame by construction, so the erase can't drift. Compare
+      against the &lt;video&gt; player's 1-frame seek/compositor jitter.
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import MP4Box from 'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/+esm'
+
+const FPS = 24
+const log = (s) => (document.getElementById('log').textContent = s)
+const cv = document.getElementById('cv')
+const ctx = cv.getContext('2d')
+const slider = document.getElementById('slider')
+const frameLbl = document.getElementById('frameLbl')
+
+let mode = 'erase'
+let frames = []         // VideoFrame[] indexed by display order
+let mouth = null        // mouth.json
+let decodeMs = 0, demuxMs = 0
+
+// ---- mp4 demux (mp4box) → EncodedVideoChunks + decoder config ----
+function description(file, track) {
+  const trak = file.getTrackById(track.id)
+  for (const entry of trak.mdia.minf.stbl.stsd.entries) {
+    const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C
+    if (box) {
+      const s = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN)
+      box.write(s)
+      return new Uint8Array(s.buffer, 8) // strip the 8-byte box header
+    }
+  }
+  throw new Error('no codec description box found')
+}
+
+async function demux(url) {
+  const t0 = performance.now()
+  const file = MP4Box.createFile()
+  const chunks = []
+  let config = null
+  const done = new Promise((resolve, reject) => {
+    file.onError = reject
+    file.onReady = (info) => {
+      const track = info.videoTracks[0]
+      config = { codec: track.codec, codedWidth: track.video.width, codedHeight: track.video.height, description: description(file, track) }
+      file.setExtractionOptions(track.id, null, { nbSamples: track.nb_samples })
+      file.onSamples = (id, user, samples) => {
+        for (const s of samples) {
+          chunks.push(new EncodedVideoChunk({
+            type: s.is_sync ? 'key' : 'delta',
+            timestamp: (s.cts / s.timescale) * 1e6,
+            duration: (s.duration / s.timescale) * 1e6,
+            data: s.data,
+          }))
+        }
+        if (chunks.length >= track.nb_samples) resolve()
+      }
+      file.start()
+    }
+  })
+  const buf = await (await fetch(url)).arrayBuffer()
+  buf.fileStart = 0
+  file.appendBuffer(buf)
+  file.flush()
+  await done
+  demuxMs = performance.now() - t0
+  return { config, chunks }
+}
+
+// ---- decode every frame, cache in order ----
+async function decodeAll(config, chunks) {
+  const t0 = performance.now()
+  const out = []
+  const dec = new VideoDecoder({
+    output: (frame) => out.push(frame),
+    error: (e) => log('decoder error: ' + e),
+  })
+  dec.configure(config)
+  for (const c of chunks) dec.decode(c)
+  await dec.flush()
+  dec.close()
+  // VideoDecoder emits in decode order; sort to presentation (timestamp) order
+  out.sort((a, b) => a.timestamp - b.timestamp)
+  decodeMs = performance.now() - t0
+  return out
+}
+
+// ---- render one frame (top RGB half) + mouth overlay, frame-locked ----
+function draw(i) {
+  i = Math.max(0, Math.min(frames.length - 1, i))
+  const f = frames[i]
+  if (!f) return
+  // The stacked frame is 640×1280: top half is the RGB character (on black).
+  ctx.clearRect(0, 0, cv.width, cv.height)
+  ctx.drawImage(f, 0, 0, f.codedWidth, f.codedHeight / 2, 0, 0, cv.width, cv.height)
+
+  const rec = mouth?.frames?.[i]
+  if (rec?.poly && mode !== 'off') {
+    let pts = rec.poly.map(([x, y]) => [x * cv.width, y * cv.height])
+    if (mode === 'erase') {
+      // Dilate from the centroid (the production shader does this analytically via uMargin)
+      // so the fill covers the lip edges, not just the inner mouth.
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+      const D = 2.4
+      pts = pts.map(([x, y]) => [cx + (x - cx) * D, cy + (y - cy) * D])
+    }
+    ctx.beginPath()
+    pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+    ctx.closePath()
+    if (mode === 'erase') {
+      ctx.fillStyle = `rgb(${rec.skin[0]},${rec.skin[1]},${rec.skin[2]})`
+      ctx.fill()
+    } else {
+      ctx.strokeStyle = 'rgba(255,70,170,0.95)'
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+  frameLbl.textContent = `${i} / ${frames.length - 1}`
+  slider.value = String(i)
+}
+
+// ---- playback ----
+let playing = false, rafId = 0, t0play = 0, f0play = 0
+function tick(now) {
+  if (!playing) return
+  const i = Math.floor(((now - t0play) / 1000) * FPS + f0play) % frames.length
+  draw(i)
+  rafId = requestAnimationFrame(tick)
+}
+document.getElementById('play').onclick = (e) => {
+  playing = !playing
+  e.target.textContent = playing ? '⏸ pause' : '▶ play'
+  e.target.classList.toggle('on', playing)
+  if (playing) { t0play = performance.now(); f0play = Number(slider.value); rafId = requestAnimationFrame(tick) }
+  else cancelAnimationFrame(rafId)
+}
+slider.oninput = () => { if (!playing) draw(Number(slider.value)) }
+const setMode = (m) => {
+  mode = m
+  for (const id of ['mErase', 'mContour', 'mOff'])
+    document.getElementById(id).classList.toggle('on', id.toLowerCase().includes(m))
+  draw(Number(slider.value))
+}
+document.getElementById('mErase').onclick = () => setMode('erase')
+document.getElementById('mContour').onclick = () => setMode('contour')
+document.getElementById('mOff').onclick = () => setMode('off')
+
+// ---- boot ----
+;(async () => {
+  try {
+    if (!('VideoDecoder' in window)) { log('❌ WebCodecs (VideoDecoder) not available in this browser'); return }
+    log('demuxing…')
+    const { config, chunks } = await demux('./monet-talk-2.mp4')
+    log(`decoding ${chunks.length} chunks (codec ${config.codec})…`)
+    frames = await decodeAll(config, chunks)
+    mouth = await (await fetch('./monet-talk-2.mouth.json')).json()
+    slider.max = String(frames.length - 1)
+
+    const w = frames[0].codedWidth, h = frames[0].codedHeight
+    const perFrameMB = (w * h * 1.5) / 1e6 // NV12 estimate
+    const mem = performance.memory
+      ? `\nJS heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(0)} MB (note: VideoFrames live in GPU/media memory, not JS heap)`
+      : ''
+    log(
+      `✅ ready\n` +
+      `frames cached: ${frames.length}  (${w}×${h})\n` +
+      `demux:  ${demuxMs.toFixed(1)} ms\n` +
+      `decode: ${decodeMs.toFixed(1)} ms  (${(decodeMs / frames.length).toFixed(2)} ms/frame, HW)\n` +
+      `est. decoded-frame size: ${perFrameMB.toFixed(2)} MB (NV12) → all cached ≈ ${(perFrameMB * frames.length).toFixed(0)} MB video mem\n` +
+      `scrub = instant frame-exact (cached). erase polygon[i] paints WITH frame[i] → zero drift.` +
+      mem
+    )
+    draw(0)
+  } catch (e) {
+    log('error: ' + (e?.stack || e))
+  }
+})()
+</script>
+</body>
+</html>

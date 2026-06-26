@@ -1,0 +1,66 @@
+{
+  "default": "regular",
+  "base": "small",
+  "framings": {
+    "small": {
+      "frame": [
+        1024,
+        1024
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "origin": [
+        513,
+        950
+      ],
+      "scale": 0.8649
+    },
+    "regular": {
+      "frame": [
+        1184,
+        1184
+      ],
+      "offset": [
+        80,
+        80
+      ],
+      "origin": [
+        593,
+        1030
+      ],
+      "scale": 1.0
+    },
+    "large": {
+      "frame": [
+        1536,
+        1536
+      ],
+      "offset": [
+        256,
+        432
+      ],
+      "origin": [
+        769,
+        1382
+      ],
+      "scale": 1.2973
+    },
+    "wide": {
+      "frame": [
+        2043,
+        1173
+      ],
+      "offset": [
+        -75,
+        125
+      ],
+      "origin": [
+        438,
+        1075
+      ],
+      "scale": 0.9907
+    }
+  }
+}

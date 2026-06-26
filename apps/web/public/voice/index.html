@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monet · voice</title>
+    <!-- Silero VAD (client-side, owns the mic) — only fires on real speech, never silence -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/bundle.min.js"></script>
+    <style>
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+      body {
+        margin: 0; min-height: 100dvh; color: #efe9f2;
+        background: radial-gradient(120% 120% at 50% 18%, #2a2030, #161019);
+        font: 16px/1.55 ui-rounded, "Avenir Next", system-ui, sans-serif;
+        display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 20px;
+      }
+      h1 { font-size: 14px; font-weight: 600; letter-spacing: .5px; color: #b9aec4; margin: 0; }
+      #orb { cursor: pointer; display: block; }
+      .status { font-size: 14px; color: #9a8fa8; min-height: 20px; }
+      .pipe { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: 560px; }
+      .pipe .arr { color: #4a4056; font-size: 11px; }
+      .stage { font-size: 10px; letter-spacing: .3px; text-transform: uppercase; color: #6f6580; padding: 4px 9px; border-radius: 999px; border: 1px solid #3a3046; transition: all .18s; }
+      .stage.on { color: #161019; background: #c9b3f0; border-color: #c9b3f0; box-shadow: 0 0 16px #8f7ad055; }
+      #tl { width: 100%; max-width: 560px; height: 56px; border-radius: 8px; background: #1c1622; }
+      .legend { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; font-size: 10px; color: #8a809c; }
+      .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+      .gatelog { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 2px; font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: #7d7390; }
+      .glog.sent { color: #9fd0a0; } .glog.rej { color: #c98f8f; opacity: .85; }
+      .script { width: 100%; max-width: 540px; flex: 1; display: flex; flex-direction: column; gap: 9px; }
+      .line { font-size: 18px; line-height: 1.5; }
+      .line.monet { color: #c9b3f0; }
+      .line .who { font-size: 11px; letter-spacing: .4px; text-transform: uppercase; opacity: .5; margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Monet · voice</h1>
+    <canvas id="orb" width="260" height="260"></canvas>
+    <div class="status" id="status">tap the orb to talk</div>
+    <div class="pipe" id="pipe">
+      <span class="stage" data-s="listen">listen</span><span class="arr">›</span>
+      <span class="stage" data-s="speech">speech?</span><span class="arr">›</span>
+      <span class="stage" data-s="gate">gate</span><span class="arr">›</span>
+      <span class="stage" data-s="whisper">whisper</span><span class="arr">›</span>
+      <span class="stage" data-s="claude">claude</span><span class="arr">›</span>
+      <span class="stage" data-s="voice">voice</span>
+    </div>
+    <canvas id="tl" width="560" height="56"></canvas>
+    <div class="legend">
+      <span><i style="background:rgb(153,184,245)"></i>listen</span>
+      <span><i style="background:rgb(107,217,140)"></i>speech</span>
+      <span><i style="background:rgb(237,189,107)"></i>whisper·claude</span>
+      <span><i style="background:rgb(189,153,242)"></i>voice</span>
+      <span><i style="background:#9fd0a0"></i>✓ sent</span>
+      <span><i style="background:#d97777"></i>✗ gated</span>
+    </div>
+    <div class="gatelog" id="gatelog"></div>
+    <div class="script" id="script"></div>
+
+    <script>
+      const $ = (id) => document.getElementById(id)
+      const uid = (() => { try { let u = localStorage.getItem('monet.uid'); if (!u) { u = crypto.randomUUID(); localStorage.setItem('monet.uid', u) } return u } catch { return 'lab-' + Math.random().toString(36).slice(2) } })()
+
+      // ---------- orb (WebGL shader: fluid fbm surface + fresnel rim + audio-reactive glow) ----------
+      const cv = $('orb')
+      const DISP = 240, dpr = Math.min(window.devicePixelRatio || 1, 2)
+      cv.style.width = cv.style.height = DISP + 'px'; cv.width = cv.height = Math.round(DISP * dpr)
+      const gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true })
+      let amp = 0, t = 0, phase = 'idle', micLevel = 0, speaking = false // micLevel/speaking come from the VAD
+      const COLORS = { idle: [0.86, 0.82, 0.76], listening: [0.60, 0.72, 0.96], thinking: [0.93, 0.74, 0.42], her: [0.74, 0.60, 0.95] }
+      const tBuf = new Uint8Array(1024)
+      function rms(an) { if (!an) return 0; an.getByteTimeDomainData(tBuf); let s = 0; for (let i = 0; i < tBuf.length; i++) { const v = (tBuf[i] - 128) / 128; s += v * v } return Math.min(1, Math.sqrt(s / tBuf.length) * 3.4) }
+
+      const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }'
+      const FRAG = `precision highp float;
+        uniform vec2 u_res; uniform float u_time, u_amp; uniform vec3 u_col;
+        float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+        float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+        float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.02; a*=.5; } return v; }
+        void main(){
+          vec2 uv=(gl_FragCoord.xy - 0.5*u_res)/u_res.y;
+          float t=u_time*0.22, amp=u_amp;
+          float d=length(uv);
+          vec2 warp=vec2(fbm(uv*1.8+t), fbm(uv*1.8-t+7.0));
+          float flow=fbm(uv*1.8 + warp + t*0.35);
+          float flow2=fbm(uv*4.0 - warp*0.6 - t*0.5);
+          float fl=mix(flow, flow2, 0.4);
+          float R=0.29 + amp*0.06;
+          float soft=0.05 + amp*0.025;
+          float body=1.-smoothstep(R-soft, R+soft, d);
+          float core=clamp(1.-d/R, 0., 1.);
+          vec3 deep=u_col*0.5;
+          vec3 vein=mix(u_col, vec3(1.0), 0.72);
+          vec3 color=mix(deep, vein, smoothstep(0.28, 0.72, fl));
+          color=mix(color, mix(u_col, vec3(1.0), 0.45), pow(core,2.0)*0.6);
+          float rim=smoothstep(R-soft*3.0, R, d) * body;
+          color += mix(u_col, vec3(0.62,0.72,1.0), 0.5) * rim * 0.4;
+          color *= body;
+          float glow=exp(-max(0.,d-R)*13.0) * (0.10 + amp*0.45);
+          color += u_col*glow;
+          float alpha=clamp(body + glow*0.5, 0., 1.);
+          gl_FragColor=vec4(color, alpha);
+        }`
+      function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) $('status').textContent = 'shader: ' + gl.getShaderInfoLog(s); return s }
+      const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(prog); gl.useProgram(prog)
+      const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
+      const ploc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(ploc); gl.vertexAttribPointer(ploc, 2, gl.FLOAT, false, 0, 0)
+      const uTime = gl.getUniformLocation(prog, 'u_time'), uAmp = gl.getUniformLocation(prog, 'u_amp'), uCol = gl.getUniformLocation(prog, 'u_col'), uRes = gl.getUniformLocation(prog, 'u_res')
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+      const col = COLORS.idle.slice()
+      function lvlNow() { return phase === 'her' ? rms(herAnalyser) : phase === 'listening' ? micLevel : phase === 'thinking' ? 0.25 : 0.02 }
+      function draw() {
+        t += 0.016
+        let target = 0.05 + Math.sin(t * 1.6) * 0.03
+        if (phase === 'her' || phase === 'listening') target = Math.max(target, lvlNow())
+        else if (phase === 'thinking') target = 0.12 + Math.sin(t * 5) * 0.06
+        amp += (target - amp) * 0.25
+        const tc = COLORS[phase]; for (let i = 0; i < 3; i++) col[i] += (tc[i] - col[i]) * 0.08
+        gl.viewport(0, 0, cv.width, cv.height)
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT)
+        gl.uniform1f(uTime, t); gl.uniform1f(uAmp, amp); gl.uniform3f(uCol, col[0], col[1], col[2]); gl.uniform2f(uRes, cv.width, cv.height)
+        gl.drawArrays(gl.TRIANGLES, 0, 3)
+        drawTl()
+        requestAnimationFrame(draw)
+      }
+      // ---------- gate timeline: scrolls left; height = audio energy, colour = stage, mark = gate decision ----------
+      const tl = $('tl'), tlx = tl.getContext('2d')
+      tl.width = Math.round(560 * dpr); tl.height = Math.round(56 * dpr)
+      const COL = { idle: 'rgb(219,209,194)', listen: 'rgb(153,184,245)', speech: 'rgb(107,217,140)', thinking: 'rgb(237,189,107)', her: 'rgb(189,153,242)' }
+      let tlData = [], pendingMark = null
+      function drawTl() {
+        const W = tl.width, H = tl.height, cw = dpr, mid = H / 2
+        const st = phase === 'listening' ? (speaking ? 'speech' : 'listen') : phase
+        tlData.push({ lvl: lvlNow(), st, mark: pendingMark }); pendingMark = null
+        const COLS = Math.floor(W / cw); while (tlData.length > COLS) tlData.shift()
+        tlx.clearRect(0, 0, W, H)
+        for (let i = 0; i < tlData.length; i++) {
+          const s = tlData[i], x = i * cw, h = Math.max(cw, s.lvl * H * 0.92)
+          tlx.fillStyle = COL[s.st] || COL.idle; tlx.fillRect(x, mid - h / 2, cw, h)
+          if (s.mark) { tlx.fillStyle = s.mark === 'sent' ? '#9fd0a0' : '#d97777'; tlx.fillRect(x - cw, 0, cw * 2, H) }
+        }
+      }
+      requestAnimationFrame(draw)
+
+      // ---------- audio: her TTS playback only (the VAD owns the mic — no second consumer, no conflict) ----------
+      let actx = null, herAnalyser = null
+      async function ensureAudio() {
+        if (actx) return
+        actx = new (window.AudioContext || window.webkitAudioContext)()
+        herAnalyser = actx.createAnalyser(); herAnalyser.fftSize = 1024; herAnalyser.connect(actx.destination)
+      }
+
+      // ---------- transcript + viz helpers ----------
+      const scriptEl = $('script')
+      function line(text, who) {
+        const d = document.createElement('div'); d.className = 'line ' + (who || '')
+        d.innerHTML = (who ? '<span class="who">' + who + '</span>' : '') + text.replace(/</g, '&lt;')
+        scriptEl.appendChild(d); while (scriptEl.children.length > 10) scriptEl.firstChild.remove()
+      }
+      function stage(s) { for (const el of document.querySelectorAll('.stage')) el.classList.toggle('on', el.dataset.s === s) }
+      function glog(text, cls) { const d = document.createElement('div'); d.className = 'glog ' + (cls || ''); d.textContent = text; const g = $('gatelog'); g.insertBefore(d, g.firstChild); while (g.children.length > 7) g.lastChild.remove() }
+
+      // ---------- her brain + voice ----------
+      const history = []
+      async function sendTurn(text) {
+        phase = 'thinking'; setStatus(); stage('claude')
+        history.push({ role: 'user', content: text }); if (history.length > 16) history.splice(0, history.length - 16)
+        let reply = { text: '' }
+        try { const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json', 'x-monet-uid': uid }, body: JSON.stringify({ messages: history }) }); const d = await r.json(); reply.text = (d.text || '').trim() }
+        catch (e) { reply.text = '⚠ ' + (e.message || 'offline') }
+        if (!reply.text) reply.text = '…'
+        history.push({ role: 'assistant', content: reply.text })
+        line(reply.text, 'monet')
+        await speakHer(reply.text)
+      }
+      async function speakHer(text) {
+        if (micVAD) micVAD.pause(); speaking = false // half-duplex: stop the ears while she speaks
+        let bytes
+        try { const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }); if (!r.ok) throw 0; bytes = await r.arrayBuffer() }
+        catch { rearmAfter(0); return }
+        phase = 'her'; setStatus(); stage('voice')
+        const src = actx.createBufferSource(); src.buffer = await actx.decodeAudioData(bytes)
+        src.connect(herAnalyser); src.onended = () => rearmAfter(400)
+        src.start()
+      }
+      function rearmAfter(cooldown) { // she's done → after a beat, resume listening (half-duplex)
+        setTimeout(() => {
+          busy = false
+          if (on) { phase = 'listening'; setStatus(); stage('listen'); if (micVAD) micVAD.start() }
+          else { phase = 'idle'; setStatus(); stage('') }
+        }, cooldown)
+      }
+
+      // ---------- ears: Silero VAD owns the mic → utterance audio → energy gate → Whisper (Groq) ----------
+      // Silero only fires on real speech (never silence), so it never feeds Whisper the silence it would
+      // hallucinate its vocab on. Second guard (Jin's idea): the clip's RMS must clear MIN_RMS — rejects a
+      // rare misfire on faint noise / TTS-tail echo. Worker backstop drops all-vocab transcripts. Half-duplex.
+      let on = false, busy = false, micVAD = null
+      const MIN_RMS = 0.015 // captured-clip energy below this = not real speech → don't transcribe
+      function floatToWav(f32, rate) {
+        const len = f32.length, ab = new ArrayBuffer(44 + len * 2), dv = new DataView(ab)
+        const s = (o, str) => { for (let i = 0; i < str.length; i++) dv.setUint8(o + i, str.charCodeAt(i)) }
+        s(0, 'RIFF'); dv.setUint32(4, 36 + len * 2, true); s(8, 'WAVE'); s(12, 'fmt '); dv.setUint32(16, 16, true)
+        dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true)
+        dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); s(36, 'data'); dv.setUint32(40, len * 2, true)
+        let off = 44; for (let i = 0; i < len; i++) { let v = Math.max(-1, Math.min(1, f32[i])); dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2 }
+        return ab
+      }
+      function flush(audio) {
+        if (!audio) { busy = false; phase = on ? 'listening' : 'idle'; setStatus(); stage('listen'); return }
+        let s = 0; for (let i = 0; i < audio.length; i++) s += audio[i] * audio[i]
+        const energy = Math.sqrt(s / audio.length), r = +energy.toFixed(4), ms = Math.round((audio.length / 16000) * 1000)
+        const ok = audio.length >= 16000 * 0.2 && energy >= MIN_RMS
+        stage('gate')
+        if (!ok) { pendingMark = 'rej'; glog('✗ ' + ms + 'ms · rms ' + r + ' — gated (no real speech)', 'rej'); busy = false; phase = on ? 'listening' : 'idle'; setStatus(); stage('listen'); return }
+        pendingMark = 'sent'; busy = true; phase = 'thinking'; setStatus(); stage('whisper')
+        fetch('/api/whisper', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: floatToWav(audio, 16000) })
+          .then((r2) => r2.json())
+          .then((d) => {
+            const tx = (d.text || '').trim()
+            if (tx) { glog('✓ ' + ms + 'ms · rms ' + r + ' → "' + tx + '"', 'sent'); line(tx, 'you'); sendTurn(tx) }
+            else { glog('✓ ' + ms + 'ms · rms ' + r + ' → whisper empty (vocab-echo filtered)', 'rej'); busy = false; phase = on ? 'listening' : 'idle'; setStatus(); stage('listen') }
+          })
+          .catch(() => { glog('⚠ whisper error', 'rej'); busy = false; phase = on ? 'listening' : 'idle'; setStatus(); stage('listen') })
+      }
+      async function ensureVad() {
+        if (micVAD) return
+        micVAD = await window.vad.MicVAD.new({
+          baseAssetPath: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/',
+          onnxWASMBasePath: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/',
+          positiveSpeechThreshold: 0.6, negativeSpeechThreshold: 0.4, minSpeechFrames: 4, preSpeechPadFrames: 4, redemptionFrames: 12,
+          onFrameProcessed: (_p, frame) => { if (frame) { let s = 0; for (let i = 0; i < frame.length; i++) s += frame[i] * frame[i]; micLevel = Math.min(1, Math.sqrt(s / frame.length) * 3.4) } },
+          onSpeechStart: () => { if (on && !busy && phase === 'listening') { speaking = true; stage('speech') } },
+          onSpeechEnd: (audio) => { speaking = false; if (on && !busy && phase === 'listening') flush(audio) },
+        })
+      }
+
+      function setStatus() {
+        $('status').textContent = !on ? 'tap the orb to talk' : phase === 'her' ? 'Monet…' : phase === 'thinking' ? 'thinking…' : 'listening — say something'
+      }
+      async function toggle() {
+        if (on) { on = false; busy = false; speaking = false; if (micVAD) micVAD.pause(); phase = 'idle'; setStatus(); stage(''); return }
+        $('status').textContent = 'starting…'
+        try { await ensureAudio(); if (actx.state === 'suspended') await actx.resume(); await ensureVad() } catch (e) { $('status').textContent = 'mic blocked'; return }
+        on = true; busy = false; speaking = false; phase = 'listening'; setStatus(); stage('listen'); micVAD.start()
+      }
+      cv.onclick = () => toggle().catch(() => {})
+      setStatus()
+    </script>
+  </body>
+</html>

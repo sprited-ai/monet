@@ -1,0 +1,21 @@
+{
+  "name": "monet",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Monet — a desktop-first embodied agent. apps/desktop = the Electron shell (the product); apps/web = her body (the whiteroom web view).",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bash scripts/desktop.sh",
+    "dev:web": "npm run dev -w @monet/web",
+    "desktop": "bash scripts/desktop.sh",
+    "build": "npm run build -w @monet/web",
+    "deploy": "npm run deploy -w @monet/web",
+    "sync:contents": "node scripts/sync-contents-to-r2.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.60.0"
+  }
+}

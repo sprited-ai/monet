@@ -1,0 +1,5 @@
+# Heavy research artifacts — regenerable on gin (see README + memory).
+# The slim browser-facing JSON lives in contents/monet/*.s3body.json (committed).
+out/
+out_smooth/
+viewer/data/

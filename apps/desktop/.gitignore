@@ -1,0 +1,9 @@
+node_modules/
+package-lock.json
+ocr/monet-ocr
+ax/monet-axread
+# BYOK key lives in userData, never here — belt-and-suspenders in case anyone runs from-dir
+byok.bin
+byok.json
+.DS_Store
+*.log

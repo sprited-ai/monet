@@ -1,0 +1,16 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+*.local
+worker-configuration.d.ts
+
+# Playwright (keep tests/__screenshots__ baselines; ignore run artifacts)
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# heavy derived Studio animation clips (regen: scripts/studio-clips.sh)
+/public/studio-assets/clips/
+/public/studio-assets/toys-raw/

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>PROTOTYPE — Rhythm Cast (Monet's Garden)</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  PROTOTYPE — THROWAWAY. Delete or absorb when it has answered its question.
+  ════════════════════════════════════════════════════════════════════════
+  QUESTION: "gen-AI를 써서 리듬게임을 만든다면?" — does it feel good when your
+  RHYTHM PERFORMANCE shapes the generative birth of a living plant?
+  (DISC-5: input=skill, output=surprise; skill tilts the slot.)
+
+  WHAT'S REAL: rhythm timing, hit-judgment, combo, juice/타격감, the bloom payoff.
+  WHAT'S FAKED: the "gen-AI" result is a PROCEDURAL canvas flower whose params are
+  driven by your performance. In the real product this is an SDXL still sprite slotted
+  into the shared motion template (LIFE-3 / C7) — instant + cached/paid per MON-1.
+  Monet's reactions are text placeholders (real = painterly sprite, C6).
+
+  3 casting feels, toggle via bottom bar or ?v=lane|sigil|pulse :
+    lane  — Taiko: runes approach a hit-line, strike on the beat (readable, punchy)
+    sigil — Trace: rune-nodes light around the 마법진, tap in order (ritual/ceremonial)
+    pulse — Charge: rings contract to the beat, release on the downbeat (cozy, forgiving)
+
+  Input: SPACE or CLICK/TAP (sigil: click the lit node). R = restart.
+  ════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; }
+  html,body { height:100%; overflow:hidden; background:#0e0a1a; font-family:-apple-system,system-ui,sans-serif; }
+  #c { display:block; width:100vw; height:100vh; touch-action:none; }
+  .banner { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:10;
+    font-size:11px; letter-spacing:.18em; color:#b9a7e6; opacity:.55; text-transform:uppercase; }
+  .bar { position:fixed; bottom:0; left:0; right:0; z-index:10; display:flex; gap:8px; justify-content:center;
+    align-items:center; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(transparent,#0e0a1ad0 40%); }
+  .bar button { font:600 13px/1 system-ui; color:#e9def9; background:#2a2142; border:1px solid #4a3a72;
+    padding:9px 14px; border-radius:11px; cursor:pointer; }
+  .bar button.on { background:#7b54d8; border-color:#a585f0; color:#fff; }
+  .bar .lbl { font-size:11px; color:#9a86c8; letter-spacing:.05em; margin-right:2px; }
+</style>
+</head>
+<body>
+<div class="banner">prototype · rhythm = prompt · throwaway</div>
+<canvas id="c"></canvas>
+<div class="bar" id="bar">
+  <span class="lbl">cast feel:</span>
+  <button data-v="lane">Lane</button>
+  <button data-v="sigil">Sigil</button>
+  <button data-v="pulse">Pulse</button>
+  <span class="lbl" style="margin-left:10px">·</span>
+  <button data-act="restart">↻ Restart (R)</button>
+</div>
+<script>
+//════════ setup ════════
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W,H,DPR;
+function resize(){ DPR=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener('resize',resize); resize();
+
+const params = new URLSearchParams(location.search);
+let VARIANT = params.get('v') || 'lane';   // lane | sigil | pulse
+
+//════════ audio (synthesized — no asset files) ════════
+let AC=null;
+function audio(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); } if(AC.state==='suspended')AC.resume(); return AC; }
+function blip(freq=600, dur=0.07, type='triangle', gain=0.25, when=0){
+  const ac=audio(), t=ac.currentTime+when;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type=type; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gain,t+0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function chord(base, when=0){ [base, base*1.25, base*1.5].forEach((f,i)=>blip(f,0.5,'sine',0.16,when+i*0.01)); }
+
+//════════ song / chart ════════
+const BPM = 100, SPB = 60/BPM;            // seconds per beat
+// beat indices that carry a note (a simple, groovy pattern over 4 bars)
+const PATTERN = [0,1,2, 4,6, 8,9,10, 12,14,15, 16,18, 20,21,22, 24];
+const LEAD = 4;                            // count-in beats before first note
+const RUNE_HUES = [275, 200, 330, 50, 150, 25]; // 6 rune colors → seed the flower hue
+
+let notes=[], startT=0, running=false, ended=false, lastSchedB=-1;
+let score={hits:0, perfect:0, good:0, miss:0, combo:0, maxCombo:0, total:0, hueSum:0, hueN:0};
+let shake=0, flashes=[], particles=[], floaties=[], monetMsg='', monetT=0;
+let bloom=null;                            // the generated flower (set on end)
+
+function buildNotes(){
+  notes = PATTERN.map((b,i)=>({
+    beat: b+LEAD, t:(b+LEAD)*SPB,
+    rune: i % 6, hit:false, judged:false,
+  }));
+  score={hits:0,perfect:0,good:0,miss:0,combo:0,maxCombo:0,total:notes.length,hueSum:0,hueN:0};
+}
+
+function start(){
+  audio(); buildNotes();
+  startT = audio().currentTime + 0.25;
+  running=true; ended=false; bloom=null; lastSchedB=-1;
+  particles=[]; floaties=[]; flashes=[]; shake=0;
+  say("let's cast ✦");
+}
+function restart(){ start(); }
+
+function now(){ return audio().currentTime - startT; }
+
+//════════ beat scheduler (metronome + count-in) ════════
+function schedule(){
+  if(!running) return;
+  const ac=audio(), ahead=0.12;
+  const curB = Math.floor((now())/SPB);
+  for(let b=Math.max(curB,lastSchedB+1); (b+0)*SPB < now()+ahead; b++){
+    if(b<0) continue;
+    const when = (b*SPB) - now();
+    if(when<-0.05) continue;
+    const downbeat = b%4===0;
+    blip(downbeat?180:120, 0.05,'square', downbeat?0.18:0.09, when); // tick
+    lastSchedB=b;
+  }
+}
+
+//════════ input / judgment ════════
+const PERFECT_W=0.07, GOOD_W=0.15;          // timing windows (s)
+function judge(targetRune=null){
+  if(!running||ended) return;
+  const t=now();
+  // nearest un-judged note (for sigil, must match the lit rune)
+  let best=null,bd=1e9;
+  for(const n of notes){
+    if(n.judged) continue;
+    if(targetRune!=null && n.rune!==targetRune) continue;
+    const d=Math.abs(n.t-t);
+    if(d<bd){bd=d;best=n;}
+  }
+  if(!best || bd>GOOD_W){ // a stray tap
+    flashes.push({x:W/2,y:H*0.62,r:10,a:.5,c:'#ff6b9d',life:1}); shake=Math.max(shake,3);
+    score.combo=0; return;
+  }
+  best.judged=true; best.hit=true;
+  const x=noteX(best), y=noteY(best);
+  if(bd<=PERFECT_W){ score.perfect++; hit(best,'PERFECT',x,y,'#7be0ff',1); }
+  else { score.good++; hit(best,'GOOD',x,y,'#ffd66b',0.6); }
+  score.hits++; score.combo++; score.maxCombo=Math.max(score.maxCombo,score.combo);
+  score.hueSum+=RUNE_HUES[best.rune]; score.hueN++;
+}
+function hit(n,label,x,y,color,power){
+  blip(420+RUNE_HUES[n.rune], 0.09,'triangle',0.28);
+  if(power>=1) blip(840,0.06,'sine',0.2,0.01);
+  shake=Math.max(shake, 5+power*7);
+  flashes.push({x,y,r:14,a:.9,c:color,life:1});
+  for(let i=0;i<14+power*16;i++){ const a=Math.random()*7, s=2+Math.random()*(3+power*4);
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:1+Math.random()*3,c:color,life:1}); }
+  floaties.push({x,y,txt:label,c:color,life:1,vy:-1.1});
+  if(score.combo>0 && score.combo%6===0) say(["nice combo!","keep going ✦","you've got the rhythm","beautiful~"][Math.floor(score.combo/6)%4]);
+}
+function say(m){ monetMsg=m; monetT=now(); }
+
+addEventListener('keydown',e=>{
+  if(e.code==='KeyR'){ restart(); return; }
+  if(e.code==='Space'){ e.preventDefault();
+    if(!running && !bloom) start();
+    else if(VARIANT!=='sigil') judge();
+  }
+});
+cv.addEventListener('pointerdown',e=>{
+  if(!running && !bloom){ start(); return; }
+  if(VARIANT==='sigil'){ judge(sigilNodeAt(e.clientX,e.clientY)); }
+  else judge();
+});
+
+//════════ note position helpers (per variant) ════════
+function noteX(n){
+  const dt=n.t-now();
+  if(VARIANT==='lane') return W*0.5 + dt*260;          // approaches center hit-line from right
+  if(VARIANT==='sigil'){ const a=sigilAngle(n.rune); return W/2 + Math.cos(a)*sigilR(); }
+  return W/2;                                            // pulse: center
+}
+function noteY(n){
+  if(VARIANT==='lane') return H*0.5;
+  if(VARIANT==='sigil'){ const a=sigilAngle(n.rune); return H/2 + Math.sin(a)*sigilR(); }
+  return H/2;
+}
+function sigilR(){ return Math.min(W,H)*0.30; }
+function sigilAngle(r){ return -Math.PI/2 + r*(Math.PI*2/6); }
+function sigilNodeAt(px,py){ let best=null,bd=44;
+  for(let r=0;r<6;r++){ const a=sigilAngle(r), x=W/2+Math.cos(a)*sigilR(), y=H/2+Math.sin(a)*sigilR();
+    const d=Math.hypot(px-x,py-y); if(d<bd){bd=d;best=r;} } return best; }
+
+//════════ procedural "gen-AI" flower — performance shapes the birth ════════
+function generateBloom(){
+  const acc = score.total? score.hits/score.total : 0;          // 0..1
+  const perfRatio = score.hits? score.perfect/score.hits : 0;   // cleanliness
+  const comboRatio = score.total? score.maxCombo/score.total : 0;
+  const rarity = Math.min(1, perfRatio*0.6 + comboRatio*0.4);   // → glow, sparkles, rings
+  const hue = score.hueN? (score.hueSum/score.hueN) : 280;       // which runes you struck
+  // performance → generative parameters (this mapping IS the thesis)
+  return {
+    acc, perfRatio, comboRatio, rarity, hue,
+    petals: Math.round(5 + acc*8 + rarity*5),                    // fuller bloom when you hit more
+    rings: 1 + Math.round(rarity*2),                             // layered petals = rarer
+    len: 60 + acc*70,
+    jitter: (1-perfRatio) * 0.5,                                 // sloppy timing → wobblier petals
+    droop: (1-acc) * 0.6,                                        // misses → droopy
+    glow: 6 + rarity*34,
+    sparkles: Math.round(rarity*60),
+    hue2: (hue + 40 + rarity*60) % 360,
+    biolum: rarity,                                              // inner light
+    t0: now(),
+  };
+}
+function rarityName(r){ return r>0.85?'MYTHIC':r>0.6?'RARE':r>0.35?'UNCOMMON':'COMMON'; }
+
+//════════ end of song → summon ════════
+function finish(){
+  ended=true; running=false;
+  bloom = generateBloom();
+  shake=18; chord(180+bloom.hue);
+  for(let i=0;i<120;i++){ const a=Math.random()*7,s=3+Math.random()*7;
+    particles.push({x:W/2,y:H/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:1+Math.random()*4,
+      c:`hsl(${bloom.hue},90%,70%)`,life:1}); }
+  say(bloom.rarity>0.6?"EUREKA!!! a "+rarityName(bloom.rarity).toLowerCase()+" one ✦":"it's alive ✦");
+}
+
+//════════ render ════════
+function drawBackdrop(){
+  const g=ctx.createRadialGradient(W/2,H*0.45,40,W/2,H*0.45,Math.max(W,H)*0.7);
+  g.addColorStop(0,'#221636'); g.addColorStop(1,'#0b0716'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // faint rune circle (마법진)
+  ctx.save(); ctx.translate(W/2,H/2); ctx.globalAlpha=0.10; ctx.strokeStyle='#b9a7e6'; ctx.lineWidth=1.5;
+  const R=Math.min(W,H)*0.34; ctx.beginPath(); ctx.arc(0,0,R,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,R*0.78,0,7); ctx.stroke();
+  for(let i=0;i<6;i++){ const a=sigilAngle(i); ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R); ctx.stroke(); }
+  ctx.restore();
+}
+function drawHUD(){
+  ctx.save(); ctx.textAlign='left'; ctx.fillStyle='#cdbdf0';
+  ctx.font='600 14px system-ui';
+  ctx.fillText(`combo ${score.combo}   ·   max ${score.maxCombo}`, 16, 26);
+  ctx.fillText(`✦ ${score.perfect}   ◦ ${score.good}   × ${score.miss}`, 16, 46);
+  // progress
+  const prog = running? Math.min(1, now()/((LEAD+PATTERN[PATTERN.length-1]+2)*SPB)) : (ended?1:0);
+  ctx.fillStyle='#3a2c5e'; ctx.fillRect(16,56,W-32,4);
+  ctx.fillStyle='#7b54d8'; ctx.fillRect(16,56,(W-32)*prog,4);
+  ctx.restore();
+  // Monet reaction
+  if(monetMsg && now()-monetT<2.2){ ctx.save(); ctx.globalAlpha=Math.max(0,1-(now()-monetT)/2.2);
+    ctx.textAlign='right'; ctx.font='700 22px system-ui'; ctx.fillStyle='#ffd0e6';
+    ctx.fillText('🧙‍♀️ '+monetMsg, W-16, 36); ctx.restore(); }
+}
+function drawLane(){
+  const hy=H*0.5, hx=W*0.5;
+  // hit line
+  ctx.save(); ctx.strokeStyle='#a585f0'; ctx.globalAlpha=.8; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(hx,hy-70); ctx.lineTo(hx,hy+70); ctx.stroke();
+  ctx.globalAlpha=.25; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0,hy); ctx.lineTo(W,hy); ctx.stroke();
+  ctx.restore();
+  for(const n of notes){ if(n.judged && now()>n.t+0.2) continue;
+    const x=noteX(n); if(x<-40||x>W+40) continue; if(n.judged) continue;
+    drawRune(x,hy,18,n.rune, x<hx+30 && x>hx-30);
+  }
+}
+function drawSigil(){
+  // connecting lines between struck nodes
+  ctx.save(); ctx.strokeStyle='#a585f0'; ctx.globalAlpha=.5; ctx.lineWidth=2; ctx.beginPath();
+  let started=false;
+  for(const n of notes){ if(!n.hit) continue; const a=sigilAngle(n.rune);
+    const x=W/2+Math.cos(a)*sigilR(), y=H/2+Math.sin(a)*sigilR();
+    if(!started){ctx.moveTo(x,y);started=true;} else ctx.lineTo(x,y); }
+  ctx.stroke(); ctx.restore();
+  // nodes: highlight the one that's "due" now
+  let dueRune=null,dd=1e9;
+  for(const n of notes){ if(n.judged)continue; const d=Math.abs(n.t-now()); if(d<dd){dd=d;dueRune=n.rune;} }
+  for(let r=0;r<6;r++){ const a=sigilAngle(r), x=W/2+Math.cos(a)*sigilR(), y=H/2+Math.sin(a)*sigilR();
+    const due = r===dueRune && dd<GOOD_W*1.6;
+    drawRune(x,y,due?24:16,r,due);
+    if(due){ const pr=24+(1-dd/(GOOD_W*1.6))*26; ctx.save(); ctx.globalAlpha=.6;
+      ctx.strokeStyle=`hsl(${RUNE_HUES[r]},80%,70%)`; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(x,y,pr,0,7); ctx.stroke(); ctx.restore(); }
+  }
+}
+function drawPulse(){
+  const cx=W/2,cy=H/2, target=Math.min(W,H)*0.22;
+  ctx.save(); ctx.strokeStyle='#a585f0'; ctx.globalAlpha=.7; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(cx,cy,target,0,7); ctx.stroke(); ctx.restore();
+  // each upcoming note = a ring contracting toward the target at its hit time
+  for(const n of notes){ if(n.judged) continue; const dt=n.t-now(); if(dt>2||dt<-0.3) continue;
+    const r = target + dt*240;                  // contracts to target as dt→0
+    if(r<2) continue; ctx.save();
+    ctx.globalAlpha=Math.max(0,1-Math.abs(dt)/2); ctx.strokeStyle=`hsl(${RUNE_HUES[n.rune]},85%,72%)`;
+    ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke(); ctx.restore();
+  }
+  drawRune(cx,cy,20,0,false);
+}
+function drawRune(x,y,r,rune,glow){
+  ctx.save(); ctx.translate(x,y); const hue=RUNE_HUES[rune%6];
+  if(glow){ ctx.shadowColor=`hsl(${hue},90%,65%)`; ctx.shadowBlur=24; }
+  ctx.fillStyle=`hsl(${hue},70%,60%)`; ctx.strokeStyle='#1a1030'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<6;i++){ const a=-Math.PI/2+i*Math.PI/3; const px=Math.cos(a)*r,py=Math.sin(a)*r;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.globalAlpha=.85; ctx.font=`bold ${r}px system-ui`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('✦', 0, 1);
+  ctx.restore();
+}
+
+function drawFlower(b){
+  const cx=W/2, cy=H*0.48, age=Math.min(1,(now()-b.t0)/0.9);
+  const ease = 1-Math.pow(1-age,3);
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(ease,ease);
+  // glow halo
+  ctx.shadowColor=`hsl(${b.hue},90%,70%)`; ctx.shadowBlur=b.glow;
+  // stem
+  ctx.strokeStyle=`hsl(130,45%,${40+b.acc*10}%)`; ctx.lineWidth=7; ctx.globalAlpha=1-b.droop*0.3;
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(10,90,-10,150,b.droop*30,210); ctx.stroke();
+  // petal rings
+  for(let ring=0; ring<b.rings; ring++){
+    const rr = b.len*(1-ring*0.22), pc=b.petals;
+    for(let i=0;i<pc;i++){
+      const a=(i/pc)*Math.PI*2 + ring*0.4 + (Math.sin(now()*1.5+i)*b.jitter*0.3);
+      const jx=(Math.sin(i*12.9)*b.jitter*14), jy=(Math.cos(i*7.3)*b.jitter*14);
+      ctx.save(); ctx.rotate(a);
+      const grd=ctx.createLinearGradient(0,0,0,-rr);
+      grd.addColorStop(0,`hsl(${b.hue},85%,${55+b.biolum*15}%)`);
+      grd.addColorStop(1,`hsl(${b.hue2},90%,${70+b.biolum*15}%)`);
+      ctx.fillStyle=grd; ctx.globalAlpha=0.9-ring*0.15;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.bezierCurveTo(rr*0.28+jx, -rr*0.5, rr*0.18, -rr+jy, 0,-rr);
+      ctx.bezierCurveTo(-rr*0.18, -rr+jy, -rr*0.28+jx, -rr*0.5, 0,0);
+      ctx.fill(); ctx.restore();
+    }
+  }
+  // bioluminescent core
+  ctx.shadowBlur=b.glow*1.5; ctx.fillStyle=`hsl(${b.hue2},95%,${75+b.biolum*20}%)`;
+  ctx.beginPath(); ctx.arc(0,0,10+b.biolum*10,0,7); ctx.fill();
+  ctx.restore();
+  // sparkles
+  for(let i=0;i<b.sparkles;i++){ const a=i*2.39+now()*0.5, rad=b.len*(0.6+((i*53)%40)/60);
+    const x=cx+Math.cos(a)*rad, y=cy+Math.sin(a)*rad*0.9;
+    ctx.save(); ctx.globalAlpha=(0.4+0.6*Math.abs(Math.sin(now()*3+i)))*ease;
+    ctx.fillStyle='#fff'; ctx.fillRect(x,y,1.5,1.5); ctx.restore(); }
+
+  // result card readout (surface the state — performance → params)
+  ctx.save(); ctx.textAlign='center';
+  ctx.font='800 26px system-ui'; ctx.fillStyle=`hsl(${b.hue},90%,80%)`;
+  ctx.fillText(rarityName(b.rarity)+' BLOOM', cx, cy+250);
+  ctx.font='13px ui-monospace,monospace'; ctx.fillStyle='#bda9e8';
+  const lines=[
+    `accuracy ${(b.acc*100|0)}%   ·   perfect-ratio ${(b.perfRatio*100|0)}%   ·   maxcombo ${score.maxCombo}/${score.total}`,
+    `→ petals ${b.petals}  rings ${b.rings}  glow ${b.glow|0}  sparkles ${b.sparkles}  hue ${b.hue|0}°  jitter ${b.jitter.toFixed(2)}`,
+    `(real product: these params seed an SDXL still → motion template.  SPACE/R to cast again)`,
+  ];
+  lines.forEach((l,i)=>ctx.fillText(l, cx, cy+276+i*20));
+  ctx.restore();
+}
+
+function drawFX(){
+  for(const f of flashes){ ctx.save(); ctx.globalAlpha=f.a*f.life; ctx.fillStyle=f.c;
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r*(2-f.life),0,7); ctx.fill(); ctx.restore(); f.life-=0.06; }
+  flashes=flashes.filter(f=>f.life>0);
+  for(const p of particles){ ctx.save(); ctx.globalAlpha=p.life; ctx.fillStyle=p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); ctx.restore();
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.vx*=0.98; p.life-=0.02; }
+  particles=particles.filter(p=>p.life>0);
+  for(const f of floaties){ ctx.save(); ctx.globalAlpha=f.life; ctx.fillStyle=f.c; ctx.textAlign='center';
+    ctx.font='800 20px system-ui'; ctx.fillText(f.txt,f.x,f.y); ctx.restore(); f.y+=f.vy; f.life-=0.022; }
+  floaties=floaties.filter(f=>f.life>0);
+}
+function drawPrompt(){
+  if(running||bloom) return;
+  ctx.save(); ctx.textAlign='center'; ctx.fillStyle='#e9def9';
+  ctx.font='800 30px system-ui'; ctx.fillText('Rhythm Cast', W/2, H*0.4);
+  ctx.font='15px system-ui'; ctx.fillStyle='#b9a7e6';
+  ctx.fillText('strike the runes on the beat — your performance becomes the bloom', W/2, H*0.4+34);
+  ctx.font='700 16px system-ui'; ctx.fillStyle='#ffd0e6';
+  ctx.fillText('press SPACE / tap to begin', W/2, H*0.4+70);
+  ctx.restore();
+}
+
+//════════ main loop ════════
+function frame(){
+  requestAnimationFrame(frame);
+  // mark misses (notes that passed the window un-judged)
+  if(running){ for(const n of notes){ if(!n.judged && now()-n.t>GOOD_W){ n.judged=true; score.miss++; score.combo=0; } } }
+  if(running) schedule();
+  // end?
+  if(running && now() > (LEAD+PATTERN[PATTERN.length-1]+1.2)*SPB){ finish(); }
+
+  ctx.save();
+  if(shake>0.2){ ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake); shake*=0.85; } else shake=0;
+  drawBackdrop();
+  if(bloom){ drawFlower(bloom); }
+  else if(running){
+    if(VARIANT==='lane') drawLane();
+    else if(VARIANT==='sigil') drawSigil();
+    else drawPulse();
+  }
+  drawFX();
+  ctx.restore();
+  drawHUD();
+  drawPrompt();
+}
+frame();
+
+//════════ bottom bar ════════
+const bar=document.getElementById('bar');
+function syncBar(){ bar.querySelectorAll('button[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===VARIANT)); }
+bar.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+  if(b.dataset.v){ VARIANT=b.dataset.v; history.replaceState(0,'','?v='+VARIANT); syncBar(); restart(); }
+  if(b.dataset.act==='restart') restart();
+});
+syncBar();
+</script>
+</body>
+</html>

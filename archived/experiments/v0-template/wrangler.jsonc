@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "monet-v1",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./worker/index.ts",
+  // The Cloudflare Vite plugin auto-populates assets.directory with the client
+  // build output on `vite build`; do not set it manually.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    // Everything else is served straight from static assets (SPA);
+    // only /api/* is routed to the Hono Worker.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
+  }
+}

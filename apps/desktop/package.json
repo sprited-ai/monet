@@ -1,0 +1,16 @@
+{
+  "name": "@monet/desktop",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Monet as a transparent, always-on-top desktop being. An Electron shell over the whiteroom app's /desktop route (overlay mode), with a BYOK brain (your own Anthropic key, held only in the main process).",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:native": "swiftc -O ax/monet-axread.swift -o ax/monet-axread && swiftc -O ocr/monet-ocr.swift -o ocr/monet-ocr",
+    "postinstall": "npm run build:native || echo 'skip native build (no swiftc) — screen-read disabled'"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}
