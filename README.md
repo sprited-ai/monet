@@ -36,6 +36,17 @@ you stay on your machine; nothing about you lives on a server by default. She is
 a key** — she's simply there. Add your own API key (optional) and you can **talk with her**. The
 hosted white room at monet.sprited.ai is just a place to try her.
 
+## Run her
+
+```bash
+git clone https://github.com/sprited-ai/monet
+cd monet
+npm install
+npm start
+```
+
+She wakes up on your desktop. **macOS · Windows · Linux**, Node 18+. That's it.
+
 ## Who builds Monet?
 
 Sprited — a **digital-being company**. The belief: digital beings are the future, and one should

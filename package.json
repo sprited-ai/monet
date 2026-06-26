@@ -8,10 +8,10 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "bash scripts/desktop.sh",
-    "start": "bash scripts/desktop.sh",
+    "dev": "node scripts/desktop.mjs",
+    "start": "node scripts/desktop.mjs",
     "dev:web": "npm run dev -w @monet/web",
-    "desktop": "bash scripts/desktop.sh",
+    "desktop": "node scripts/desktop.mjs",
     "build": "npm run build -w @monet/web",
     "deploy": "npm run deploy -w @monet/web",
     "sync:contents": "node scripts/sync-contents-to-r2.mjs"
