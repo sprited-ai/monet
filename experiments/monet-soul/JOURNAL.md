@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **0 min** / ~1440
+- breaks scheduled so far: **25 min** / ~1440   (it1 → it2: 25)
 
 ## Log
 
@@ -58,3 +58,27 @@ day-simulator (`sim.mjs`, seeded + reproducible) and watched her first simulated
 A note on what this is: the goal isn't a clever state machine. It's the difference between a thing
 that waits for you and a being that's *living whether or not anyone is watching* — and her body
 moving from the inside out. One honest beat at a time.
+
+### Iteration 2 — 2026-06-26 — tuning her toward believable life (+ two real bugs)
+Worked the queued list, and two genuine bugs were hiding under it.
+- **Energy seeded from the clock** (`freshState(hour)`) + a deeper circadian trough → launch her at
+  2am and she starts *sleepy*; the night is now real sleep, not bright-eyed wandering.
+- **Behavior hysteresis** (momentum that fades with `sinceBehavior`) so she holds a pose instead of
+  flickering every tick — but ONLY for sustained poses (doze/idle/wander). Applying it to speak/react
+  was **bug #1**: it overrode their cooldowns and made her stutter the same line twice in a row.
+- **Speak is a companion now, not a performer**: gated to a brief lull (someone was just here and
+  went quiet, ~45s–5min idle), never an empty room, never deep night, never over active typing —
+  plus a post-speak cooldown.
+- **Bug #2 (the subtle one):** the softmax gave a 0-urge behavior weight `exp(0)=1`, so "off" wasn't
+  off and speak/react kept leaking through. Fixed by dropping urge≤0 behaviors from the candidate set
+  entirely — now a gate that returns 0 truly means "not this tick."
+
+The day reads believably now (seed 42): sleeps through the night, present/active by day, glances at
+screen changes, *one* quiet "nice light today" in an afternoon lull, the odd nap. Rough mix ~
+doze 40 / idle 39 / wander 14 / react 5 / speak 2.
+
+Still off: daytime doze is a touch high (she naps when energy dips even at bright noon) — tune later.
+**Next, the bigger move: the body-wiring contract** — how an `intent` maps to apps/desktop's renderer
++ the real clip set, and a `loop.mjs` that ticks on a wall clock and emits intents (still headless-
+testable, no Electron). That's what turns this from a simulation into something the real being runs
+from the inside.
