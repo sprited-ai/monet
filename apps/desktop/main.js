@@ -13,51 +13,18 @@
 
 const { app, BrowserWindow, screen, ipcMain, Menu, session, Tray, nativeImage, globalShortcut, Notification, safeStorage, net } = require('electron')
 const path = require('node:path')
-const { execFile } = require('node:child_process')
 const fs = require('node:fs')
-const os = require('node:os')
 const byok = require('./byok') // duplicated persona + reply-parse, kept pure (no Electron)
 
-// On-device screen read (local + on-demand, per Jin). DEFAULT = Accessibility: read the text the
-// frontmost app already exposes to assistive tech — no pixels are ever captured, exact strings. OCR
-// (Apple Vision over a screencapture frame) is kept as an explicit opt-in fallback for apps that
-// expose no AX text (canvas/games); it needs Screen Recording, so it never fires on its own.
-// Either way only the extracted TEXT leaves these functions; nothing persists.
-const AX_BIN = path.join(__dirname, 'ax', 'monet-axread')
-const OCR_BIN = path.join(__dirname, 'ocr', 'monet-ocr')
-
-function readViaAccessibility() {
-  return new Promise((resolve) => {
-    execFile(AX_BIN, [], { maxBuffer: 16 * 1024 * 1024 }, (e, stdout) => {
-      if (e) {
-        const msg = e.code === 3 ? 'grant Accessibility (System Settings → Privacy & Security → Accessibility)' : `ax read failed: ${e.message}`
-        return resolve({ ok: false, error: msg })
-      }
-      resolve({ ok: true, via: 'accessibility', text: (stdout || '').trim() })
-    })
-  })
-}
-
-function readViaOCR() {
-  return new Promise((resolve) => {
-    const tmp = path.join(os.tmpdir(), `monet-screen-${process.pid}-${Date.now()}.png`)
-    execFile('/usr/sbin/screencapture', ['-x', '-t', 'png', tmp], (capErr) => {
-      if (capErr) return resolve({ ok: false, error: `capture failed (grant Screen Recording?): ${capErr.message}` })
-      execFile(OCR_BIN, [tmp], { maxBuffer: 16 * 1024 * 1024 }, (ocrErr, stdout) => {
-        fs.unlink(tmp, () => {}) // the frame's pixels are gone the instant OCR is done
-        if (ocrErr) return resolve({ ok: false, error: `ocr failed (built monet-ocr?): ${ocrErr.message}` })
-        resolve({ ok: true, via: 'ocr', text: (stdout || '').trim() })
-      })
-    })
-  })
-}
-
-// The default the app's brain uses. Accessibility — no pixels.
-function readScreenText() {
-  return readViaAccessibility()
-}
-ipcMain.handle('monet:read-screen', () => readScreenText())
-ipcMain.handle('monet:read-screen-ocr', () => readViaOCR())
+// On-device screen read (local + on-demand, per Jin) — DEFAULT = Accessibility (read the text the
+// frontmost app exposes to assistive tech; no pixels captured, exact strings), with OCR as an
+// explicit opt-in fallback for apps that expose no AX text. Only the extracted TEXT ever leaves;
+// nothing persists. The implementation is a PLATFORM SEAM (./screenread): macOS is implemented,
+// Windows/Linux are open extension points (see screenread/README.md). The shell runs on every OS;
+// where there's no screen-read impl it reports unavailable and the brain falls back to chat-only.
+const screenread = require('./screenread')
+ipcMain.handle('monet:read-screen', () => screenread.readAccessibility())
+ipcMain.handle('monet:read-screen-ocr', () => screenread.readOCR())
 
 // Shared test action for the right-click menu items: read, notify, log.
 async function testRead(reader) {
@@ -239,17 +206,14 @@ function buildTray() {
 }
 
 function cornerPosition() {
-  const display = screen.getPrimaryDisplay()
-  const wa = display.workArea // excludes the menu bar + Dock
-  const b = display.bounds // the full physical display (the region UNDER the Dock too)
-  // Horizontal + top insets live in the work area (clear of the menu bar). The BOTTOM uses the full
-  // display bounds, not the work area, so she stands on the PHYSICAL screen bottom rather than
-  // floating above the Dock. Renderer.overlayLiftPx un-clips her soles within the window, so her feet
-  // land right on that bottom edge. She's docked bottom-LEFT and floats BELOW the Dock z-order
-  // (level 'floating'); with a centered Dock there's no horizontal overlap, so the Dock never covers
-  // her. If your Dock is left-positioned or very wide it can clip her — move MONET_CORNER or the Dock.
-  const left = CORNER.endsWith('l') ? wa.x + MARGIN : wa.x + wa.width - W - MARGIN
-  const top = CORNER.startsWith('t') ? wa.y + MARGIN : b.y + b.height - H
+  const { x, y, width, height } = screen.getPrimaryDisplay().workArea
+  const left = CORNER.endsWith('l') ? x + MARGIN : x + width - W - MARGIN
+  // Sit MARGIN above the work-area bottom (= the Dock's top edge). The overlay floats BELOW the Dock
+  // z-order (level 'floating'), so docking flush onto/under the Dock line lets the Dock cover her
+  // feet — keep the gap. Her feet are un-clipped *inside* the window by Renderer.overlayCamDrop, not
+  // by the window position. (To stand her on the physical screen bottom instead, use display.bounds
+  // here — but with a Dock that overlaps her corner it will clip her.)
+  const top = CORNER.startsWith('t') ? y + MARGIN : y + height - H - MARGIN
   return { x: Math.round(left), y: Math.round(top) }
 }
 
@@ -284,11 +248,15 @@ function createWindow() {
   // Float above normal windows, on every Space — but BELOW the Dock (level 'floating' < dock level),
   // so she sits on top of your work without covering the Dock. ('screen-saver' would cover it; the
   // trade-off is she also won't float over full-screen apps, which is fine for a desktop being.)
+  // Cross-platform: the level name + setVisibleOnAllWorkspaces are macOS semantics; on Windows/Linux
+  // they degrade to plain always-on-top (no Spaces concept) — tolerated, not an error.
   win.setAlwaysOnTop(true, 'floating')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
   // Click-through by default; { forward: true } still delivers mousemove to the page so the preload
-  // can keep silhouette-testing the cursor and flip interactivity on when it's over Monet.
+  // can keep silhouette-testing the cursor and flip interactivity on when it's over Monet. macOS +
+  // Windows honor { forward }; Linux ignores it, so there the silhouette hit-test can't run and
+  // click-through is all-or-nothing until a per-platform path lands.
   win.setIgnoreMouseEvents(true, { forward: true })
 
   win.loadURL(MONET_URL)
