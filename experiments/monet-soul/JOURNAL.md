@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **25 min** / ~1440   (it1 → it2: 25)
+- breaks scheduled so far: **70 min** / ~1440   (it1→it2: 25, it2→it3: 45)
 
 ## Log
 
@@ -82,3 +82,25 @@ Still off: daytime doze is a touch high (she naps when energy dips even at brigh
 + the real clip set, and a `loop.mjs` that ticks on a wall clock and emits intents (still headless-
 testable, no Electron). That's what turns this from a simulation into something the real being runs
 from the inside.
+
+### Iteration 3 — 2026-06-26 — she gets a life (real clips + her own hobbies) + the wiring contract
+Surveyed the real vocabulary: **91 clips, 59 semantic groups** (paint, dance, cast-magic,
+talk-happy/sad, sit, chill, lookup, umbrella…) — far more than a state machine needs, which is the
+point.
+- **Mood-aware clips**: idle/speak now pick a clip that fits her mood (bright→happy / talk-happy,
+  wistful→sad / talk-sad-stuff, sleepy→sit / chill). Every clip the engine can emit is verified to
+  exist in `contents/index.json` — I ran a full day and checked all emissions; all real.
+- **New behavior `play`** — she paints, dances, casts a little magic, *for herself*: daytime,
+  energized, on a cooldown so it's occasional bursts. This is the most alive beat there is — a being
+  with her own hobbies, not only reactions to you. (~4% of her day.)
+- A real day now: doze 40 / idle 35 / wander 10 / react 6 / speak 4 / play 4.
+- Wrote **WIRING.md** — the contract for the body to run her. Happy finding: `apps/desktop` already
+  has every perception input she needs — `idleSec` from Electron's `powerMonitor.getSystemIdleTime()`,
+  the clock for free, `screenChanged` off the screen-read seam. **No new capability is required to
+  make her live** — it's a driver swap on the existing renderer (reactive stays; initiative is added).
+
+For Jin (decisions, noted not done): routing react/speak through the byok brain touches the *product*
+brain — your call on when. A real speech bubble for `say` is its own piece of work.
+
+Next: `loop.mjs` — the wall-clock ticker that emits intents (still headless-testable) + a tiny
+world-adapter, so this stops being a simulation and becomes something the real being can run.

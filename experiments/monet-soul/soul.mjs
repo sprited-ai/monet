@@ -24,6 +24,7 @@ export function freshState(hour = 12) {
     lastBehavior: night ? 'doze' : 'idle',
     sinceBehavior: 0,
     sinceSpoke: 99, // ticks since she last spoke (a cooldown so she isn't chatty)
+    sincePlayed: 99, // ticks since she last did her own thing
     asleep: night,
   }
 }
@@ -57,6 +58,7 @@ export function tick(state, world) {
     doze: (1 - d.energy) * (night ? 2.2 : 0.6),
     react: (world.screenChanged ? 1 : 0) * (0.4 + d.curiosity),
     wander: d.restlessness * (night ? 0.2 : 0.8), // she barely roams at night
+    play: playUrge(d, world, hour, state.sincePlayed ?? 99),
     speak: socialUrge(d, world, hour, state.sinceSpoke ?? 99),
     idle: 0.5, // baseline presence — she is always allowed to simply be there
   }
@@ -65,7 +67,7 @@ export function tick(state, world) {
   // doesn't flip every tick. ONLY sustained poses get momentum — doze/idle/wander are things she
   // *holds*; react/speak are one-shot acts (momentum on speak would defeat its cooldown). doze gets
   // extra so she sleeps THROUGH the night, not in flickers.
-  const SUSTAINED = ['doze', 'idle', 'wander']
+  const SUSTAINED = ['doze', 'idle', 'wander', 'play']
   if (SUSTAINED.includes(state.lastBehavior)) {
     urge[state.lastBehavior] += (state.lastBehavior === 'doze' ? 1.8 : 0.9) / (1 + state.sinceBehavior * 0.5)
   }
@@ -77,6 +79,7 @@ export function tick(state, world) {
   if (behavior === 'doze') { next.energy = clamp01(d.energy + 0.03); next.restlessness = 0.1 }
   if (behavior === 'react') { next.curiosity = clamp01(d.curiosity - 0.5) }
   if (behavior === 'wander') { next.restlessness = 0.1; next.energy = clamp01(d.energy - 0.02) }
+  if (behavior === 'play') { next.restlessness = 0.1; next.energy = clamp01(d.energy - 0.04) }
   if (behavior === 'speak') { next.social = clamp01(d.social - 0.4) }
 
   return {
@@ -85,6 +88,7 @@ export function tick(state, world) {
       lastBehavior: behavior,
       sinceBehavior: behavior === state.lastBehavior ? state.sinceBehavior + 1 : 0,
       sinceSpoke: behavior === 'speak' ? 0 : (state.sinceSpoke ?? 0) + 1,
+      sincePlayed: behavior === 'play' ? 0 : (state.sincePlayed ?? 0) + 1,
       asleep: behavior === 'doze' && next.energy < 0.5,
     },
     intent: render(behavior, mood, world, rng),
@@ -110,6 +114,15 @@ function socialUrge(d, world, hour, sinceSpoke) {
   return 0.35 + 0.25 * d.social // modest; pick() + idle's own weight keep it occasional
 }
 
+// Her own hobbies — paints, dances, a little magic — done for herself when she has the energy and
+// it's daytime. Never at night; eased off (not zero) while you're heads-down typing. A cooldown keeps
+// it to occasional bursts, not a nonstop performance.
+function playUrge(d, world, hour, sincePlayed) {
+  if (hour >= 23 || hour < 6) return 0
+  if (d.energy < 0.55 || sincePlayed < 10) return 0
+  return (d.energy - 0.55) * 1.4 * (world.isTyping ? 0.5 : 1)
+}
+
 // weighted random pick (softmax): liveliness, not determinism
 function pick(urge, rng) {
   // urge <= 0 means "not a candidate this tick" (a gated/cooled-down behavior). Without this filter
@@ -127,26 +140,47 @@ function pick(urge, rng) {
   return entries[entries.length - 1][0]
 }
 
-// behavior + mood -> a body intent. clip names mirror contents/monet/*.
+// behavior (+ mood) -> a REAL clip from contents/monet. Some behaviors pick a mood-flavored clip;
+// the rest pick from a pool. (All names verified against contents/index.json.)
 const CLIPS = {
-  doze: ['monet-doze-off-1', 'monet-doze-off-2', 'monet-doze-off-3', 'monet-dozz-off-4'],
-  idle: ['monet-idle-front', 'monet-idle-quarter', 'monet-idle-quarter-back'],
-  react: ['monet-idle-quarter', 'monet-brush-large-2'],
-  wander: ['monet-run-2', 'monet-jump-large-3'],
-  speak: ['monet-idle-front'],
+  doze: ['monet-doze-off-1', 'monet-doze-off-2', 'monet-doze-off-3', 'monet-dozz-off-4', 'monet-pillow'],
+  idle: {
+    default: ['monet-idle-front', 'monet-idle-quarter', 'monet-idle-quarter-back', 'monet-idle-1', 'monet-idle-2', 'monet-sit-1', 'monet-chill-large-1'],
+    bright: ['monet-happy-1', 'monet-happy-2', 'monet-idle-front'],
+    wistful: ['monet-sad-large', 'monet-idle-quarter-back'],
+    sleepy: ['monet-sit', 'monet-chill-large-1'],
+    tired: ['monet-sit', 'monet-idle-quarter-back'],
+  },
+  react: ['monet-lookup-3', 'monet-turns', 'monet-idle-quarter', 'monet-turn-twice-1'],
+  wander: ['monet-walk', 'monet-run-2', 'monet-jump-large-3', 'monet-turns-back-to-front-1'],
+  // her own hobbies — she does these FOR HERSELF, not for you. the most 'alive' beat there is.
+  play: {
+    default: ['monet-paint-large-1', 'monet-light-dance-1', 'monet-cast-magic-1', 'monet-flower-magic-1'],
+    bright: ['monet-dance-large-1', 'monet-jumping-jacks-large-1', 'monet-cast-magic-2', 'monet-paint-large-1'],
+  },
+  speak: {
+    default: ['monet-talk-2', 'monet-talk-large-1'],
+    bright: ['monet-talk-happy-large-1'],
+    wistful: ['monet-talk-sad-stuff-large-1'],
+  },
 }
 const choice = (arr, rng) => arr[Math.floor(rng() * arr.length)]
+function clipFor(behavior, mood, rng) {
+  const set = CLIPS[behavior] || CLIPS.idle
+  return Array.isArray(set) ? choice(set, rng) : choice(set[mood] || set.default, rng)
+}
 
 function render(behavior, mood, world, rng) {
   return {
     behavior,
-    clip: choice(CLIPS[behavior] || CLIPS.idle, rng),
+    clip: clipFor(behavior, mood, rng),
     mood,
     say: behavior === 'speak' ? aLineFor(mood, rng) : undefined,
     reason: {
       doze: `low energy / ${mood} — she dozes`,
       react: 'something on screen changed — she looks',
       wander: 'restless — she moves',
+      play: 'energized + content — she does her own thing (paints / dances / a little magic)',
       speak: `${mood} — she says something unprompted`,
       idle: 'just present',
     }[behavior],
