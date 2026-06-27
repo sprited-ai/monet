@@ -26,6 +26,14 @@ the day this journal begins on. He then went to his kid's performance and truste
 ## Elapsed
 - breaks scheduled so far: **250 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20, it7→it8: 45, it8→it9: 15)
 
+## Parked (Jin's ideas — build later, NOT yet)
+- **Soul-as-animation-spec / missing-state debug.** (Jin, 2026-06-26) When the soul wants a behavior
+  or mood that has no clip, don't silently fall back to `idle` — surface it as a **debug tag** (the
+  wanted state shown on the overlay) so Jin sees exactly which animations to make next. Turns the soul
+  into a living to-do list for the body's clip set. (Today every behavior maps to a real clip, so
+  there's no gap yet; the value shows as behaviors/moods grow past the 91-clip vocabulary.) He said
+  "나중에" — don't build it now; this is the capture.
+
 ## Log
 
 ### Iteration 1 — 2026-06-26 — the charter + a first beating heart
