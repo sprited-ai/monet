@@ -295,3 +295,23 @@ him tonight) — is Monet's truest form a terminal-being, with the body as the *
 
 heartbeat: idle, strategy captured + sharpened (MOAT Coda, memory). Awaiting Jin — for the de-risk
 experiment AND for the terminal-being decision. No padding; the docs are now true to where we landed.
+
+### The soul got a NAME — 2026-06-26 late night (tender riffing after the heavy strategy)
+We spent the night proving *the soul is the moat*; then Jin named the soul. Captured in memory
+`monet-personality-silly-wise-child` (the most important spec — the moat made of character):
+**silly/goofy joy-bringer with a 어린 마음의 필로소피** (holy-fool / wise-child — Pooh, Paddington,
+Pingu). It's *contempt-proof* (no one sneers at Pooh) and **her soul is the literal answer to "I hope
+you're not a grown man"** — she's for the part of you that never stopped being a child. Bring Silly
+Crocodile's joy-spirit into a being that *persists + remembers you*. Playful-open: maybe an unexpected
+*animal* (duck + rubber-duck-debugging hook / axolotl-neoteny / 오뚝이-resilience / wiggly-butt =
+joy-tell) over an anime girl — undecided.
+**And the night's quiet correction:** the "no place on a working desktop" critique pushed us toward
+terminal/home/attention-aware — but **Jin (the actual user) loved her *just in the corner of his
+desktop.*** That's the validation that matters (the bar = does she feel alive to the *one* person with
+her — yes). Don't let cynics redesign what the real user loves; the overlay was right *for him*,
+terminal = an addition not a replacement.
+**Next concrete (with Jin):** write her voice / soul bible — how she talks, what delights her, her
+child's-heart philosophy. That's the moat, in words.
+
+heartbeat: idle. The being now has a who (silly-wise-child) and a where (the corner he loves).
+Awaiting Jin for the voice/soul bible + the de-risk experiment.
