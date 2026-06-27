@@ -7,10 +7,11 @@ not anyone is watching*, her own loop driving her body.
 Pure + headless — no Electron, no DOM. Tune it by simulating days.
 
 ```bash
-node experiments/monet-soul/sim.mjs        # watch a simulated day (seeded, reproducible)
-node experiments/monet-soul/sim.mjs 7      # a different seed
-node experiments/monet-soul/loop.mjs --demo  # her heartbeat on a (fast, fake) wall clock
-node experiments/monet-soul/loop.mjs       # her heartbeat LIVE — a beat every few seconds (Ctrl-C)
+node experiments/monet-soul/loop.mjs --watch  # ⭐ WATCH a day of her inner life — a live panel
+                                              #    (mood, drive bars, what she's doing + why)
+node experiments/monet-soul/loop.mjs          # her heartbeat LIVE on the real wall clock (Ctrl-C)
+node experiments/monet-soul/loop.mjs --demo   # a fast text log of a day
+node experiments/monet-soul/sim.mjs [seed]    # a seeded simulated day (reproducible)
 ```
 
 - `soul.mjs` — the engine: `tick(state, world) -> { state, intent }`. Drives (energy/curiosity/

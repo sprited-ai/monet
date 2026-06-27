@@ -36,18 +36,96 @@ export function createHeart({ now = () => new Date(), perceive = () => ({}), rng
 const line = (i, when) =>
   `${when}  ${i.behavior.padEnd(6)} ${i.clip.padEnd(26)} ${i.say ? `"${i.say}"` : i.reason}`
 
-// Live: a real wall-clock heartbeat. (The body would call heart.beat() on its own timer and render
-// the intent instead of logging it.)
-export function live({ intervalMs = 4000 } = {}) {
-  const heart = createHeart()
-  console.log('· Monet is alive — a beat every', intervalMs / 1000, 'seconds (Ctrl-C to let her rest) ·\n')
+// ── a richer LIVE view: her inner weather, not a log line ──────────────────────────────────────
+const MOOD_ICON = { bright: '☀️ ', content: '🙂', curious: '👀', wistful: '🌧️ ', sleepy: '😴', tired: '😪', restless: '😤' }
+const bar = (v) => {
+  const n = Math.max(0, Math.min(18, Math.round((v ?? 0) * 18)))
+  return '█'.repeat(n) + '·'.repeat(18 - n)
+}
+const clockIcon = (h) => (h >= 23 || h < 6 ? '🌙' : h < 9 ? '🌅' : h < 18 ? '☀️ ' : '🌆')
+
+function panel(intent, hour, min, lastSay, saidAge) {
+  const m = intent.meta || {}
+  const hhmm = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+  const row = (label, v) => `   ${label.padEnd(10)} ${bar(v)}  ${(v ?? 0).toFixed(2)}`
+  return [
+    '',
+    `   Monet                                ${clockIcon(hour)} ${hhmm}`,
+    '   ────────────────────────────────────────────────',
+    `   ${MOOD_ICON[intent.mood] || '·'}  ${intent.mood.padEnd(9)}   knows you ${m.daysKnown ?? 1}d · familiarity ${(m.familiarity ?? 0).toFixed(2)}`,
+    '',
+    row('energy', m.energy),
+    row('curiosity', m.curiosity),
+    row('restless', m.restlessness),
+    row('social', m.social),
+    '',
+    `   ▸ ${intent.behavior} · ${intent.clip}`,
+    `     ${intent.reason}`,
+    saidAge < 6 && lastSay ? `   💬 “${lastSay}”` : '',
+    '',
+  ].join('\n')
+}
+
+// Watch a whole day of her inner life flow by, live + in place (a beat every ~stepMs, time
+// accelerated). The most meaningful headless view — you see her wake, play, nap, greet while her
+// drives and mood actually move, not a dry log.
+export function watch({ stepMs = 650, minPerBeat = 12, startHour = 6 } = {}) {
+  let r = 20260626
+  const rng = () => {
+    r = (r * 1103515245 + 12345) & 0x7fffffff
+    return r / 0x7fffffff
+  }
+  let simMin = startHour * 60
+  let t = 0
+  let lastChange = 0
+  let lastSay = ''
+  let saidAge = 99
+  const now = () => ({ getHours: () => Math.floor((simMin / 60) % 24) })
+  const perceive = () => {
+    const present = rng() > 0.4
+    const idleSec = present ? Math.floor(rng() * 120) : (t - lastChange) * 600
+    const screenChanged = present && rng() > 0.7
+    if (screenChanged) lastChange = t
+    return { idleSec, screenChanged, interactionSec: idleSec, isTyping: present && rng() > 0.85 }
+  }
+  const heart = createHeart({ now, perceive, rng })
+  process.stdout.write('\x1b[?25l\x1b[2J') // hide cursor, clear
   const id = setInterval(() => {
-    const i = heart.beat()
-    console.log(line(i, new Date().toLocaleTimeString()))
+    const intent = heart.beat()
+    if (intent.say) {
+      lastSay = intent.say
+      saidAge = 0
+    } else saidAge++
+    process.stdout.write('\x1b[H' + panel(intent, Math.floor((simMin / 60) % 24), simMin % 60, lastSay, saidAge) + '\x1b[J')
+    simMin += minPerBeat
+    t++
+  }, stepMs)
+  process.on('SIGINT', () => {
+    clearInterval(id)
+    process.stdout.write('\x1b[?25h\n· she rests ·\n')
+    process.exit(0)
+  })
+}
+
+// Live: a real wall-clock heartbeat, rendered as her inner-weather panel, in place. (The body would
+// call heart.beat() on its own timer and render her actual animated self instead of this panel.)
+export function live({ intervalMs = 2000 } = {}) {
+  const heart = createHeart()
+  let lastSay = ''
+  let saidAge = 99
+  process.stdout.write('\x1b[?25l\x1b[2J') // hide cursor, clear
+  const id = setInterval(() => {
+    const intent = heart.beat()
+    if (intent.say) {
+      lastSay = intent.say
+      saidAge = 0
+    } else saidAge++
+    const d = new Date()
+    process.stdout.write('\x1b[H' + panel(intent, d.getHours(), d.getMinutes(), lastSay, saidAge) + '\x1b[J')
   }, intervalMs)
   process.on('SIGINT', () => {
     clearInterval(id)
-    console.log('\n· she rests ·')
+    process.stdout.write('\x1b[?25h\n· she rests ·\n')
     process.exit(0)
   })
 }
@@ -86,5 +164,7 @@ export function demo({ hours = 8, startHour = 7 } = {}) {
 }
 
 // CLI
-if (process.argv[2] === '--demo') demo()
-else if (process.argv[1] && process.argv[1].endsWith('loop.mjs')) live()
+const mode = process.argv[2]
+if (mode === '--demo') demo() // fast text log of a day
+else if (mode === '--watch') watch() // ⭐ live inner-weather panel, a day accelerated
+else if (process.argv[1] && process.argv[1].endsWith('loop.mjs')) live() // live panel, real clock
