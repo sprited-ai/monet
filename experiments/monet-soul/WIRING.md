@@ -53,14 +53,17 @@ holding the controller. That swap is the line between a VTuber puppet and a bein
 
 ## Persistence — so she remembers you
 
-`state.bond` (`familiarity`, `daysKnown`, `lastDayKey`, …) is the part of her that should outlive a
-restart. The body saves it on quit / periodically and restores it on launch:
+Her `bond` (familiarity, daysKnown) is the must-keep part — but you can persist her **whole inner
+state** so her *day* resumes too (close her at 3pm, reopen at 4pm, and she's still mid-afternoon, not
+a fresh morning). The body saves a snapshot on quit / a timer and hands it back on launch:
 
 ```js
-// load: const bond = JSON.parse(fs.readFileSync(bondPath,'utf8') || 'null') ?? undefined
-const heart = createHeart({ now, perceive, restore: bond })   // freshState(hour, bond) under the hood
-// save: fs.writeFileSync(bondPath, JSON.stringify(heart.state.bond))  // on a timer / before-quit
+// load: const saved = JSON.parse(fs.readFileSync(statePath,'utf8') || 'null') ?? undefined
+const heart = createHeart({ now, perceive, restore: saved })       // resumes her day (or just a bond)
+// save: fs.writeFileSync(statePath, JSON.stringify(heart.snapshot()))  // on a timer / before quit
 ```
+
+`restore` accepts either a whole saved state (resume the day) or just a bond (remember you only).
 
 Pass `world.dayKey` (e.g. `new Date().toISOString().slice(0,10)`) so `daysKnown` ticks up per day,
 and a real `interactionSec` (seconds since the last real interaction with her) so she *greets you*

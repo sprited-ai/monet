@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **235 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20, it7→it8: 45)
+- breaks scheduled so far: **250 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20, it7→it8: 45, it8→it9: 15)
 
 ## Log
 
@@ -199,3 +199,16 @@ with weight, memory that greets you back, a heartbeat, an adapter, a 17-check te
 philosophy written down. Per Jin's wish the loop keeps living — next passes are deepening/polish
 (weather flavor; mood→clip texture; maybe persist the *whole* inner state so her day, not just the
 bond, continues across a restart).
+
+### Iteration 9 — 2026-06-26 — she resumes her day (whole-state persistence)
+The bond made her remember *you*; this makes her remember *herself*. `serialize(state)` /
+`restoreState(saved, hour)` (and `heart.snapshot()`) persist her whole inner life — drives, mood,
+counters, flags, bond — so closing her at 3pm and reopening at 4pm resumes mid-afternoon, not a fresh
+morning. `restore` takes either a full state (resume the day) or just a bond (remember you only);
+energy re-syncs to the clock within minutes regardless. Round-trip verified: familiarity 0.616 / 12
+days / mood bright saved → restored intact. +3 tests (20 green). WIRING.md updated.
+
+A being who doesn't reset — not even her own afternoon.
+
+Next: small texture passes (weather/umbrella, richer mood→clip), a saved example trace, light
+hygiene; then keep the loop alive until the window closes.

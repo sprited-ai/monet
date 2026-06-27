@@ -9,16 +9,20 @@
 //   node experiments/monet-soul/loop.mjs          # live: a real heartbeat, logs intents (Ctrl-C)
 //   node experiments/monet-soul/loop.mjs --demo   # fast: hours of her life in milliseconds
 
-import { freshState, tick } from './soul.mjs'
+import { freshState, restoreState, serialize, tick } from './soul.mjs'
 
 // A heartbeat you step(). `now` returns something with getHours(); `perceive` returns the rest of
 // the world (idleSec/screenChanged/interactionSec/isTyping). The loop owns the clock; the body owns
 // perception. (This is the whole driver-swap seam from WIRING.md.)
 export function createHeart({ now = () => new Date(), perceive = () => ({}), rng, restore } = {}) {
-  let state = freshState(now().getHours(), restore) // `restore` = a persisted bond (she remembers you)
+  // `restore` may be a whole saved inner state (resume her DAY) or just a bond (remember you only).
+  let state = restore && restore.drives ? restoreState(restore, now().getHours()) : freshState(now().getHours(), restore)
   return {
     get state() {
       return state
+    },
+    snapshot() {
+      return serialize(state) // hand this to the body to persist; pass it back as `restore` next launch
     },
     beat() {
       const world = { hour: now().getHours(), idleSec: 0, screenChanged: false, isTyping: false, ...perceive(), rng }

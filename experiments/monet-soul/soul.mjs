@@ -42,6 +42,23 @@ export function freshState(hour = 12, bond) {
   }
 }
 
+// Persist her WHOLE inner life — not just the bond — so a restart resumes her day instead of starting
+// it over. The body writes serialize(state) on quit / on a timer, and passes it back as `restore`.
+// (energy re-syncs to the current hour within minutes via the circadian drift; tick() rolls the day.)
+export function serialize(state) {
+  return JSON.parse(JSON.stringify(state)) // plain + JSON-safe: drives, mood, bond, counters, flags
+}
+
+export function restoreState(saved, hour = 12) {
+  if (!saved || !saved.drives) return freshState(hour, saved && saved.bond)
+  // resume from where she was; fill any missing field from a fresh state (forward-compatible saves)
+  return {
+    ...freshState(hour, saved.bond),
+    ...saved,
+    bond: { ...freshBond(), ...(saved.bond || {}) },
+  }
+}
+
 const clamp01 = (x) => Math.max(0, Math.min(1, x))
 
 // Energy follows a circadian baseline: high mid-day, low at night (peak ~14:00, trough ~04:00).

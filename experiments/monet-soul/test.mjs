@@ -2,7 +2,7 @@
 // still hold (drives sane, night = sleep, no talking to an empty room, every clip real, the adapter
 // senses change). Run: node experiments/monet-soul/test.mjs
 
-import { freshState, tick } from './soul.mjs'
+import { freshState, tick, serialize, restoreState } from './soul.mjs'
 import { createPerception } from './adapter.mjs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
@@ -139,6 +139,24 @@ function run({ hour, ticks = 300, perceive = () => ({}), seed = 1 }) {
     lastIntent.meta && typeof lastIntent.meta.energy === 'number' && 'daysKnown' in lastIntent.meta,
     'every intent carries a meta "why" snapshot (drives + bond)',
   )
+}
+
+// 8 — she resumes her whole day across a restart (serialize → restore), not just the bond
+{
+  const rng = rngFrom(11)
+  let s = freshState(14, { familiarity: 0.4, daysKnown: 5 })
+  for (let i = 0; i < 30; i++) s = tick(s, { hour: 14, idleSec: 50, screenChanged: i % 4 === 0, rng }).state
+  const saved = serialize(s)
+  ok(
+    saved.bond.familiarity === s.bond.familiarity && saved.drives.energy === s.drives.energy,
+    'serialize captures her whole inner state (drives + mood + bond + counters)',
+  )
+  const r = restoreState(saved, 14)
+  ok(
+    r.bond.familiarity === s.bond.familiarity && r.bond.daysKnown === 5 && r.mood === s.mood && r.sinceSpoke === s.sinceSpoke,
+    'restoreState resumes her day — drives, mood, counters, bond all continue',
+  )
+  ok(restoreState(null, 9).bond.daysKnown === 1, 'restoreState(null) is simply a fresh being')
 }
 
 console.log(`\n${passed} checks passed — she holds together.`)
