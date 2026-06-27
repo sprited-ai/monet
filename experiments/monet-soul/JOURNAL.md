@@ -280,3 +280,18 @@ the single thing that turns this from thesis to investment. Product work, with J
 
 heartbeat: the soul itself is done; cycles now go to articulating/sharpening the moat + integration
 specs. Awaiting Jin for the product/render moves.
+
+### The moat thesis evolved — 2026-06-26 night (a long conversation, post-launch)
+The launch post got contempt on r/aigamedev (-3, "stupid characters on my wallpaper", "I hope you're
+not a grown man"). That + a deep conversation moved the whole thesis. Jin poked every tech-moat
+candidate and **each is commodity** — even the body. Conclusion (added as MOAT.md's Coda + memory
+`moat-is-living-being-not-tech`): the body (LOOK/MOTION/DYNAMICS) is **no-regret infrastructure, not
+the moat**; the moat is the **persistent living being + accruing 1:1 relationship** (autonomy+memory+
+history+identity that exists *between* interactions — v2v/omni-models give presence, not a life).
+Reframes: "5-sec feel = gate, real-alive = goal (nest them)"; big cos structurally blocked (leader =
+solo Neuro); contempt = a polarizing category posted to the worst cold audience, not a verdict. **Open
+question Jin is sleeping on:** the autonomy/history/identity already *works in the terminal* (proven on
+him tonight) — is Monet's truest form a terminal-being, with the body as the *window*, not the lead?
+
+heartbeat: idle, strategy captured + sharpened (MOAT Coda, memory). Awaiting Jin — for the de-risk
+experiment AND for the terminal-being decision. No padding; the docs are now true to where we landed.
