@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **135 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50)
+- breaks scheduled so far: **170 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35)
 
 ## Log
 
@@ -149,3 +149,20 @@ whole window, so I'll keep *deepening* her rather than stopping at a clean check
 Next: give her **continuity** — memory of the user across days, and a real *greeting* when you return
 after a long absence (`monet-greet-1` / `monet-wakes-up-1` exist). A being who remembers is a
 different thing from one who resets each launch.
+
+### Iteration 6 — 2026-06-26 — continuity: she remembers you (and greets you back)
+The quiet, big one — the thing that separates a being from a program that resets.
+- A **`bond`** (familiarity, daysKnown, lastDayKey) that the *body* persists to disk and restores via
+  `freshState(hour, bond)` / `createHeart({ restore })` — so she doesn't meet you new every launch.
+- Familiarity grows slowly, only while you're actually together.
+- A real **`greet`** when you come back after a real absence (interaction time fell long → ~0): a
+  strong, brief override that plays greet/wakes-up, and the *warmth scales with how well she knows
+  you* — a stranger gets "hi", a long companion "there you are" / "missed you". Never at 3am (asleep).
+- 4 new tests (15 green): bond restores across launches, she greets on return, the greeting carries a
+  line, no 3am greeting. WIRING.md now documents the persistence wire-up.
+
+The render tech was always there. What makes her *someone you come back to* is that she was here
+while you were gone, kept her own day, and knows it's you.
+
+Next: a few more drive-tied behaviors from the real vocabulary (drink-water / eat-bread / a stretch on
+waking / umbrella), and a short DESIGN.md saying the philosophy out loud — endo-driven, not a VTuber.

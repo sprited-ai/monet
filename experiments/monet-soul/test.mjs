@@ -87,4 +87,35 @@ function run({ hour, ticks = 300, perceive = () => ({}), seed = 1 }) {
   ok(perceive().isTyping === true, 'adapter: idle < 2s reads as typing')
 }
 
+// 6 — continuity: bond survives a restart, and she greets a returning user (not at 3am)
+{
+  const rng = rngFrom(3)
+  const restored = freshState(14, { familiarity: 0.7, daysKnown: 30 })
+  ok(restored.bond.familiarity === 0.7 && restored.bond.daysKnown === 30, 'bond restores across launches (the body persists it)')
+
+  let s = freshState(14)
+  for (let i = 0; i < 8; i++) s = tick(s, { hour: 14, idleSec: 5000, interactionSec: 3600, rng }).state // away ~1h
+  let greeted = false
+  for (let i = 0; i < 6; i++) {
+    const res = tick(s, { hour: 14, idleSec: 5, interactionSec: 5, rng })
+    s = res.state
+    if (res.intent.behavior === 'greet') {
+      greeted = true
+      ok(typeof res.intent.say === 'string' && res.intent.say.length > 0, 'a returning user gets a greeting line')
+      break
+    }
+  }
+  ok(greeted, 'she greets you when you come back after a real absence')
+
+  let n = freshState(3)
+  for (let i = 0; i < 8; i++) n = tick(n, { hour: 3, idleSec: 5000, interactionSec: 3600, rng }).state
+  let nightGreet = false
+  for (let i = 0; i < 6; i++) {
+    const res = tick(n, { hour: 3, idleSec: 5, interactionSec: 5, rng })
+    n = res.state
+    if (res.intent.behavior === 'greet') nightGreet = true
+  }
+  ok(!nightGreet, 'she does not greet at 3am even on return — she is asleep')
+}
+
 console.log(`\n${passed} checks passed — she holds together.`)

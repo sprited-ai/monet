@@ -16,7 +16,14 @@
 export const DRIVES = ['energy', 'curiosity', 'restlessness', 'social']
 
 // A fresh being at the start of a session.
-export function freshState(hour = 12) {
+// Her bond with the user — the part that should OUTLIVE a restart. The body persists this little
+// object to disk and passes it back into freshState(hour, bond), so she remembers you across days
+// instead of meeting you new every launch.
+export function freshBond() {
+  return { familiarity: 0, daysKnown: 1, lastDayKey: null, prevInteraction: 0, greetCooldown: 0 }
+}
+
+export function freshState(hour = 12, bond) {
   const night = hour >= 23 || hour < 6
   return {
     // energy is seeded from the clock: launch her at 2am and she starts sleepy, not "bright".
@@ -25,6 +32,7 @@ export function freshState(hour = 12) {
     sinceBehavior: 0,
     sinceSpoke: 99, // ticks since she last spoke (a cooldown so she isn't chatty)
     sincePlayed: 99, // ticks since she last did her own thing
+    bond: bond ? { ...freshBond(), ...bond } : freshBond(), // restored across launches by the body
     asleep: night,
   }
 }
@@ -43,6 +51,20 @@ export function tick(state, world) {
   const hour = world.hour ?? 12
   const rng = world.rng ?? Math.random // sim passes a seeded rng; the body passes a real one
 
+  // --- bond: the part of her that remembers you across days (persisted by the body) ---
+  const bond = { ...(state.bond || freshBond()) }
+  const inter = world.interactionSec ?? world.idleSec ?? 999
+  const present = (world.idleSec ?? 999) < 60
+  if (world.dayKey && world.dayKey !== bond.lastDayKey) {
+    if (bond.lastDayKey !== null) bond.daysKnown += 1 // another day spent together
+    bond.lastDayKey = world.dayKey
+  }
+  if (present) bond.familiarity = clamp01(bond.familiarity + 0.0008) // grows slowly, only when together
+  // she lights up when you come back after a real absence (interaction time fell from long → ~0)
+  const justReturned = present && bond.prevInteraction > 1800 && inter < 60 && bond.greetCooldown <= 0
+  bond.prevInteraction = inter
+  bond.greetCooldown = Math.max(0, bond.greetCooldown - 1)
+
   // --- drives drift; the circadian clock leads energy ---
   d.energy += (circadianEnergy(hour) - d.energy) * 0.08
   d.curiosity = clamp01(d.curiosity + 0.01 + (world.screenChanged ? 0.4 : 0))
@@ -55,6 +77,7 @@ export function tick(state, world) {
 
   // --- candidate behaviors, scored by state + perception ---
   const urge = {
+    greet: justReturned && !night ? 6 : 0, // a strong, brief override — she lights up when you return
     // deep pull at night; by day she only naps when genuinely low (energy < 0.5), not just idle
     doze: night ? (1 - d.energy) * 2.2 : Math.max(0, 0.5 - d.energy) * 1.3,
     react: (world.screenChanged ? 1 : 0) * (0.4 + d.curiosity),
@@ -82,6 +105,7 @@ export function tick(state, world) {
   if (behavior === 'wander') { next.restlessness = 0.1; next.energy = clamp01(d.energy - 0.02) }
   if (behavior === 'play') { next.restlessness = 0.1; next.energy = clamp01(d.energy - 0.04) }
   if (behavior === 'speak') { next.social = clamp01(d.social - 0.4) }
+  if (behavior === 'greet') { bond.greetCooldown = 45; next.social = clamp01(d.social - 0.2) }
 
   return {
     state: {
@@ -90,9 +114,10 @@ export function tick(state, world) {
       sinceBehavior: behavior === state.lastBehavior ? state.sinceBehavior + 1 : 0,
       sinceSpoke: behavior === 'speak' ? 0 : (state.sinceSpoke ?? 0) + 1,
       sincePlayed: behavior === 'play' ? 0 : (state.sincePlayed ?? 0) + 1,
+      bond,
       asleep: behavior === 'doze' && next.energy < 0.5,
     },
-    intent: render(behavior, mood, world, rng),
+    intent: render(behavior, mood, world, rng, bond),
   }
 }
 
@@ -164,6 +189,7 @@ const CLIPS = {
     bright: ['monet-talk-happy-large-1'],
     wistful: ['monet-talk-sad-stuff-large-1'],
   },
+  greet: ['monet-greet-1', 'monet-wakes-up-1', 'monet-happy-1'], // when you come back to her
 }
 const choice = (arr, rng) => arr[Math.floor(rng() * arr.length)]
 function clipFor(behavior, mood, rng) {
@@ -171,21 +197,33 @@ function clipFor(behavior, mood, rng) {
   return Array.isArray(set) ? choice(set, rng) : choice(set[mood] || set.default, rng)
 }
 
-function render(behavior, mood, world, rng) {
+function render(behavior, mood, world, rng, bond) {
+  const familiarity = bond ? bond.familiarity : 0
   return {
     behavior,
     clip: clipFor(behavior, mood, rng),
     mood,
-    say: behavior === 'speak' ? aLineFor(mood, rng) : undefined,
+    say:
+      behavior === 'speak' ? aLineFor(mood, rng)
+      : behavior === 'greet' ? greetLine(familiarity, rng)
+      : undefined,
     reason: {
       doze: `low energy / ${mood} — she dozes`,
       react: 'something on screen changed — she looks',
       wander: 'restless — she moves',
       play: 'energized + content — she does her own thing (paints / dances / a little magic)',
+      greet: `you came back — she greets you (familiarity ${familiarity.toFixed(2)})`,
       speak: `${mood} — she says something unprompted`,
       idle: 'just present',
     }[behavior],
   }
+}
+
+// Her greeting warms with how well she knows you — a stranger gets "hi", a long companion "missed you".
+function greetLine(familiarity, rng) {
+  if (familiarity > 0.5) return choice(["you're back! :)", 'oh — missed you.', 'there you are.'], rng)
+  if (familiarity > 0.15) return choice(['oh, hi!', "you're back :)", 'hey — hi.'], rng)
+  return choice(['oh — hello.', 'hi.'], rng)
 }
 
 // the rare unprompted line — tiny + honest for now (a later iteration routes this through her brain)

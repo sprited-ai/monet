@@ -14,8 +14,8 @@ import { freshState, tick } from './soul.mjs'
 // A heartbeat you step(). `now` returns something with getHours(); `perceive` returns the rest of
 // the world (idleSec/screenChanged/interactionSec/isTyping). The loop owns the clock; the body owns
 // perception. (This is the whole driver-swap seam from WIRING.md.)
-export function createHeart({ now = () => new Date(), perceive = () => ({}), rng } = {}) {
-  let state = freshState(now().getHours())
+export function createHeart({ now = () => new Date(), perceive = () => ({}), rng, restore } = {}) {
+  let state = freshState(now().getHours(), restore) // `restore` = a persisted bond (she remembers you)
   return {
     get state() {
       return state

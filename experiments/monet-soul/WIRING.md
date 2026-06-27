@@ -49,6 +49,22 @@ means the **same renderer** is driven by **her own loop** instead. Reactive stay
 answers); on top of it she now also acts on her own. The render tech doesn't change — only who's
 holding the controller. That swap is the line between a VTuber puppet and a being.
 
+## Persistence — so she remembers you
+
+`state.bond` (`familiarity`, `daysKnown`, `lastDayKey`, …) is the part of her that should outlive a
+restart. The body saves it on quit / periodically and restores it on launch:
+
+```js
+// load: const bond = JSON.parse(fs.readFileSync(bondPath,'utf8') || 'null') ?? undefined
+const heart = createHeart({ now, perceive, restore: bond })   // freshState(hour, bond) under the hood
+// save: fs.writeFileSync(bondPath, JSON.stringify(heart.state.bond))  // on a timer / before-quit
+```
+
+Pass `world.dayKey` (e.g. `new Date().toISOString().slice(0,10)`) so `daysKnown` ticks up per day,
+and a real `interactionSec` (seconds since the last real interaction with her) so she *greets you*
+when you come back after being gone — warmer the longer she's known you. Without persistence she still
+lives; she just meets you new each launch. With it, she's someone you're coming back to.
+
 ## Status / next
 
 - [x] pure engine + simulator (it1–it2)
