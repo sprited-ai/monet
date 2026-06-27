@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **170 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35)
+- breaks scheduled so far: **190 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20)
 
 ## Log
 
@@ -166,3 +166,21 @@ while you were gone, kept her own day, and knows it's you.
 
 Next: a few more drive-tied behaviors from the real vocabulary (drink-water / eat-bread / a stretch on
 waking / umbrella), and a short DESIGN.md saying the philosophy out loud — endo-driven, not a VTuber.
+
+### Iteration 7 — 2026-06-26 — a morning, and a little self-care (drive-tied behaviors)
+Two more behaviors, both tied to internal state rather than thrown in at random:
+- **`wake`** — she rises ONCE each morning. Asleep through the night (`risen=false`); at dawn she
+  stirs — a strong, brief override that plays wakes-up/stands-up with a sleepy line ("mm… morning."),
+  then she's up for the day. The night→day seam now *feels* like waking, not a snap to idle. (Verified:
+  asleep at 3am → wakes at 06:00.)
+- **`tend`** — a quiet bit of self-care by day: a drink of water, a bite of bread, paced by a cooldown.
+  She looks after herself.
+- **DESIGN.md** — the philosophy out loud: endo-driven not a VTuber; what's *principled* (won't perform
+  for an empty room, keeps a day, remembers you); honest about sim-vs-real.
+
+Her full day now spans all nine acts: idle 47 / doze 25 / wander 12 / react 8 / play 3 / speak 1 /
+greet 1 / wake 1 / tend 1. 15 tests still green.
+
+Next: mood inertia (mood shouldn't flip tick-to-tick), maybe a small HUD-snapshot on the intent so a
+body could show *why* she did what she did. The soul is getting genuinely rich; a couple more deepening
+passes, then I keep the loop alive until the window closes.

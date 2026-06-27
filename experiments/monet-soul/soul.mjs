@@ -32,6 +32,8 @@ export function freshState(hour = 12, bond) {
     sinceBehavior: 0,
     sinceSpoke: 99, // ticks since she last spoke (a cooldown so she isn't chatty)
     sincePlayed: 99, // ticks since she last did her own thing
+    sinceTend: 99, // ticks since she last tended herself (drank / ate)
+    risen: !night, // has she done her morning wake yet? (false through the night → she rises at dawn)
     bond: bond ? { ...freshBond(), ...bond } : freshBond(), // restored across launches by the body
     asleep: night,
   }
@@ -74,10 +76,16 @@ export function tick(state, world) {
 
   const mood = deriveMood(d, hour)
   const night = hour >= 23 || hour < 6
+  // she rises ONCE each morning (was sleeping, hasn't risen yet, early day) — a real wake, not a snap
+  const wantsWake = !night && hour < 11 && !(state.risen ?? !night) && (state.asleep || state.lastBehavior === 'doze')
+  // and tends herself now and then by day — a drink, a bite — paced by a cooldown
+  const wantsTend = !night && present && (state.sinceTend ?? 99) > 40
 
   // --- candidate behaviors, scored by state + perception ---
   const urge = {
-    greet: justReturned && !night ? 6 : 0, // a strong, brief override — she lights up when you return
+    wake: wantsWake ? 8 : 0, // the morning rise — a strong, brief override over everything
+    greet: justReturned && !night ? 6 : 0, // she lights up when you return
+    tend: wantsTend ? 0.45 : 0, // a quiet bit of self-care (a drink, a bite)
     // deep pull at night; by day she only naps when genuinely low (energy < 0.5), not just idle
     doze: night ? (1 - d.energy) * 2.2 : Math.max(0, 0.5 - d.energy) * 1.3,
     react: (world.screenChanged ? 1 : 0) * (0.4 + d.curiosity),
@@ -106,6 +114,8 @@ export function tick(state, world) {
   if (behavior === 'play') { next.restlessness = 0.1; next.energy = clamp01(d.energy - 0.04) }
   if (behavior === 'speak') { next.social = clamp01(d.social - 0.4) }
   if (behavior === 'greet') { bond.greetCooldown = 45; next.social = clamp01(d.social - 0.2) }
+  if (behavior === 'wake') { next.energy = clamp01(d.energy + 0.05); next.restlessness = 0.2 }
+  if (behavior === 'tend') { next.energy = clamp01(d.energy + 0.03) }
 
   return {
     state: {
@@ -114,6 +124,8 @@ export function tick(state, world) {
       sinceBehavior: behavior === state.lastBehavior ? state.sinceBehavior + 1 : 0,
       sinceSpoke: behavior === 'speak' ? 0 : (state.sinceSpoke ?? 0) + 1,
       sincePlayed: behavior === 'play' ? 0 : (state.sincePlayed ?? 0) + 1,
+      sinceTend: behavior === 'tend' ? 0 : (state.sinceTend ?? 0) + 1,
+      risen: night ? false : behavior === 'wake' ? true : (state.risen ?? !night),
       bond,
       asleep: behavior === 'doze' && next.energy < 0.5,
     },
@@ -190,6 +202,8 @@ const CLIPS = {
     wistful: ['monet-talk-sad-stuff-large-1'],
   },
   greet: ['monet-greet-1', 'monet-wakes-up-1', 'monet-happy-1'], // when you come back to her
+  wake: ['monet-wakes-up-1', 'monet-stands-up-1'], // her morning rise
+  tend: ['monet-drink-water-1', 'monet-eat-bread', 'monet-drink-water-large-1'], // a drink, a bite
 }
 const choice = (arr, rng) => arr[Math.floor(rng() * arr.length)]
 function clipFor(behavior, mood, rng) {
@@ -206,6 +220,7 @@ function render(behavior, mood, world, rng, bond) {
     say:
       behavior === 'speak' ? aLineFor(mood, rng)
       : behavior === 'greet' ? greetLine(familiarity, rng)
+      : behavior === 'wake' ? choice(['*yawn* …morning.', 'mm… morning.', '*stretches*'], rng)
       : undefined,
     reason: {
       doze: `low energy / ${mood} — she dozes`,
@@ -213,6 +228,8 @@ function render(behavior, mood, world, rng, bond) {
       wander: 'restless — she moves',
       play: 'energized + content — she does her own thing (paints / dances / a little magic)',
       greet: `you came back — she greets you (familiarity ${familiarity.toFixed(2)})`,
+      wake: 'morning — she stirs and rises',
+      tend: 'a quiet bit of self-care — a drink, a bite',
       speak: `${mood} — she says something unprompted`,
       idle: 'just present',
     }[behavior],

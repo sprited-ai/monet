@@ -21,6 +21,7 @@ node experiments/monet-soul/loop.mjs       # her heartbeat LIVE — a beat every
 - `sim.mjs` — a seeded 24h simulator that logs what she does.
 - `test.mjs` — light assertions guarding the promises of aliveness (`node …/test.mjs`).
 - `WIRING.md` — the body-wiring contract (how she plugs into the Electron shell).
+- `DESIGN.md` — the philosophy: endo-driven, not a VTuber; what's principled; honest about sim-vs-real.
 - `JOURNAL.md` — the build log (read this first).
 
 > Status: early. The engine runs; making the day read *believably alive* is the ongoing work — see
