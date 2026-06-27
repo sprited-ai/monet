@@ -35,16 +35,17 @@ export class Renderer {
   readonly overlay: boolean
   // The whiteroom framing intentionally runs her feet past the bottom edge (a cozy crop where she
   // stands at the bottom of the frame). In the room that reads fine; in the overlay it clips her
-  // soles. Lift the render up by this many CSS px so the soles clear the window's bottom edge and she
-  // sits *on* it (grounded "standing on the screen edge" look, not floating). Overlay-only; tune live
-  // via window.renderer.overlayLiftPx in dev.
+  // soles. So the OVERLAY camera is dropped by this many world units — a pure downward pan (eye AND
+  // target lowered together) that brings her feet up into frame. Overlay-only (the room keeps the
+  // cozy crop); applied each frame in computeCamera, so it's live-tunable via
+  // window.renderer.overlayCamDrop in dev.
   //
-  // Measured against the default 620-tall window at zoom 1 (apps/desktop, MONET_H): the feet anchor
-  // (BASE.y 0.87, world y 0) projects ~23 px below the bottom edge, and the lowest opaque sole pixel
-  // (frame-v 0.892, world y −0.067) ~40 px below. 46 grounds the soles with ~6 px clearance, well
-  // under the ~69 px of empty headroom above her bow (so the lift never clips her head). Per-clip
-  // soles share the 0.87 anchor, so this holds across clips; re-tune if MONET_H changes.
-  overlayLiftPx = 46
+  // Measured at the default 620-tall window, zoom 1: 0.20 world ≈ a 50 px downward pan — the lowest
+  // opaque sole (frame-v 0.892, world y −0.067) lands ~10 px above the window bottom, with the bow
+  // still ~16 px below the top (head never clipped). Per-clip soles share the 0.87 anchor, so this
+  // holds across clips. Replaces the old viewport-scissor lift — a real camera move, no transparent
+  // strip, perspective-correct.
+  overlayCamDrop = 0.2
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -109,6 +110,12 @@ export class Renderer {
     this.zoom += (this.zoomTarget - this.zoom) * 0.2 // ease toward the wheel target
     const target = vec3.fromValues(this.cam.target[0], this.cam.target[1], this.cam.target[2])
     const eye = vec3.fromValues(this.cam.eye[0], this.cam.eye[1], this.cam.eye[2])
+    // Overlay: drop the whole camera (eye + target) so the view pans down onto her feet — un-clips
+    // her soles within the window. Room mode leaves the cozy crop untouched.
+    if (this.overlay) {
+      target[1] -= this.overlayCamDrop
+      eye[1] -= this.overlayCamDrop
+    }
     // Dolly: scale the eye's offset from the target by 1/zoom (zoom>1 = closer/bigger).
     vec3.subtract(eye, eye, target)
     vec3.scale(eye, eye, 1 / this.zoom)
@@ -134,13 +141,8 @@ export class Renderer {
       gl.viewport(0, 0, this.canvas.width, this.canvas.height)
       if (this.overlay) gl.clearColor(0, 0, 0, 0)
       else gl.clearColor(0.93, 0.945, 0.96, 1)
-      gl.clear(gl.COLOR_BUFFER_BIT) // clears the whole canvas (ignores viewport) → bottom strip stays transparent
-      // Overlay: shift the scene up so her feet clear the window's bottom edge (the lifted region's
-      // bottom strip is left transparent; aspect is unchanged — it reads canvas size, not viewport).
-      if (this.overlay && this.overlayLiftPx) {
-        const lift = Math.round(this.overlayLiftPx * this.dpr)
-        gl.viewport(0, lift, this.canvas.width, this.canvas.height)
-      }
+      gl.clear(gl.COLOR_BUFFER_BIT) // clears the whole canvas
+      // (Overlay feet framing is now a camera drop in computeCamera — overlayCamDrop — not a viewport shift.)
       gl.disable(gl.DEPTH_TEST) // painter's order for v0 (a single sprite); depth sort arrives with more entities
       const frame: Frame = {
         gl,
