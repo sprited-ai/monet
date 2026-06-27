@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monet — a day with her</title>
+<style>
+  :root { --warm:#f4c95d; --soft:#e8dccb; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+    color: var(--soft);
+    background: radial-gradient(120% 90% at 50% 38%, #211a15 0%, #140f0c 55%, #0b0807 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100%; gap: 6px; overflow: hidden; -webkit-user-select: none; user-select: none;
+  }
+  header { text-align: center; opacity: .8; }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: .04em; color: var(--soft); }
+  header .hint { font-size: 12px; opacity: .55; margin-top: 2px; }
+
+  /* the stage: a 440² window onto the 640×1280 (color-top / alpha-bottom) clips */
+  .stage { position: relative; width: 440px; height: 440px; margin-top: 4px; }
+  .glow {
+    position: absolute; inset: 6% 12% 4%; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(244,201,93,.13), rgba(244,201,93,0) 72%); filter: blur(6px);
+  }
+  .her { position: absolute; inset: 0; overflow: hidden; }
+  .her video {
+    position: absolute; left: 0; top: 0;
+    width: 440px; height: 880px;            /* show only the top (color) half */
+    mix-blend-mode: screen;                  /* drop the black bg onto the dark page */
+    opacity: 0; transition: opacity .4s ease;
+  }
+  .bubble {
+    position: absolute; left: 50%; top: 4px; transform: translate(-50%, -6px);
+    max-width: 340px; padding: 9px 14px; border-radius: 16px 16px 16px 4px;
+    background: rgba(244, 238, 228, .96); color: #2a2017; font-size: 14.5px; font-weight: 500;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35); opacity: 0; pointer-events: none;
+    transition: opacity .3s ease, transform .3s ease; white-space: nowrap;
+  }
+  .bubble.show { opacity: 1; transform: translate(-50%, 0); }
+  .hud { display: flex; align-items: center; gap: 14px; font-size: 13px; opacity: .82; margin-top: 2px; }
+  .hud .mood { font-size: 15px; } .hud .dot { opacity: .35; }
+  .doing { font-size: 12.5px; opacity: .5; min-height: 1.2em; text-align: center; }
+  .controls { display: flex; gap: 8px; margin-top: 6px; }
+  button {
+    font: inherit; font-size: 13px; color: var(--soft); cursor: pointer;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    padding: 7px 13px; border-radius: 999px; transition: background .15s;
+  }
+  button:hover { background: rgba(255,255,255,.12); }
+  button.primary { background: rgba(244,201,93,.16); border-color: rgba(244,201,93,.3); color: var(--warm); }
+  footer { position: fixed; bottom: 10px; font-size: 11px; opacity: .3; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🐤 Monet</h1>
+    <div class="hint">she lives her own day — move your mouse, or step away and come back</div>
+  </header>
+
+  <div class="stage">
+    <div class="glow"></div>
+    <div class="her">
+      <video id="vidA" muted loop playsinline preload="auto"></video>
+      <video id="vidB" muted loop playsinline preload="auto"></video>
+    </div>
+    <div class="bubble" id="bubble"></div>
+  </div>
+
+  <div class="doing" id="doing"></div>
+  <div class="hud">
+    <span id="clock">07:00</span><span class="dot">·</span>
+    <span class="mood" id="mood">🙂</span><span id="moodname">content</span>
+    <span class="dot">·</span><span id="bond">knows you 1d</span>
+  </div>
+
+  <div class="controls">
+    <button id="away" class="primary">👋 step away</button>
+    <button id="speed">⏩ 1×</button>
+  </div>
+
+  <footer>experiments/monet-soul · the soul, given a body — accelerated day</footer>
+
+<script type="module">
+import { freshState, tick } from '../soul.mjs'
+import { voiceLine } from './voice.mjs'
+
+// soul clip name → an actual file in contents/monet (10 names differ / have no exact clip)
+const ALIAS = {
+  'monet-idle-front': 'monet-idle-1', 'monet-idle-quarter': 'monet-idle-2',
+  'monet-idle-quarter-back': 'monet-idle-3', 'monet-sit': 'monet-sit-1', 'monet-sad-large': 'monet-idle-3',
+  'monet-doze-off-1': 'monet-sit-2', 'monet-doze-off-2': 'monet-sit-2', 'monet-doze-off-3': 'monet-chill-large-1',
+  'monet-dozz-off-4': 'monet-chill-large-1', 'monet-pillow': 'monet-sit-2',
+}
+const resolveClip = (n) => ALIAS[n] || n
+const MOOD = { bright:'☀️', content:'🙂', curious:'👀', wistful:'🌧️', sleepy:'😴', tired:'😪', restless:'😤' }
+const ACTION = {
+  wake:'…waking up', idle:'', wander:'…wandering about', play:'…doing her own thing',
+  react:'…oh? she noticed', speak:'', greet:'…she lights up', tend:'…a little snack', doze:'…fast asleep 💤',
+}
+
+const $ = (id) => document.getElementById(id)
+const bubble = $('bubble'), clockEl = $('clock'), moodEl = $('mood'), moodName = $('moodname')
+const bondEl = $('bond'), doingEl = $('doing'), awayBtn = $('away'), speedBtn = $('speed')
+
+// ── double-buffered video: load into the back buffer, crossfade in on canplay (never abort the
+//    playing front buffer — that was the bug: re-loading aborted every load → rs stuck at 0) ──
+const vids = [$('vidA'), $('vidB')]
+let front = 0, curFile = null
+function setVideo(name) {
+  const file = resolveClip(name)
+  if (file === curFile) return
+  curFile = file
+  const back = vids[1 - front]
+  const swap = () => {
+    back.removeEventListener('canplay', swap)
+    back.play().catch(() => {})
+    back.style.opacity = 1
+    vids[front].style.opacity = 0
+    front = 1 - front
+  }
+  back.addEventListener('canplay', swap, { once: true })
+  back.addEventListener('error', () => { if (file !== 'monet-idle-1') { curFile = null; setVideo('monet-idle-1') } }, { once: true })
+  back.src = `/contents/monet/${file}.mp4`
+  back.load()
+}
+
+function showBubble(text) {
+  bubble.textContent = text; bubble.classList.add('show')
+  clearTimeout(showBubble._t); showBubble._t = setTimeout(() => bubble.classList.remove('show'), 3600)
+}
+
+// ── sim ──
+const STEP_MIN = 10
+let state = freshState(7), simMin = 7 * 60, speed = 1
+let present = true, awaySec = 0, lastMove = Date.now(), moved = false
+let lastBehavior = null, held = 0
+
+function world() {
+  const hour = Math.floor(simMin / 60) % 24
+  let idleSec
+  if (present) { idleSec = Math.floor((Date.now() - lastMove) / 1000); awaySec = 0 }
+  else { awaySec += STEP_MIN * 60; idleSec = awaySec }
+  const w = { hour, idleSec, interactionSec: idleSec, screenChanged: moved, isTyping: false, dayKey: 'd' + Math.floor(simMin / 1440), rng: Math.random }
+  moved = false
+  return w
+}
+
+function step() {
+  const { state: next, intent } = tick(state, world())
+  state = next
+  const SUSTAIN = ['idle', 'wander', 'play', 'doze']
+  if (intent.behavior !== lastBehavior) { setVideo(intent.clip); lastBehavior = intent.behavior; held = 0 }
+  else if (SUSTAIN.includes(intent.behavior) && ++held >= 8) { setVideo(intent.clip); held = 0 }
+
+  const line = voiceLine(intent, Math.random)
+  if (line) showBubble(line)
+
+  clockEl.textContent = `${String(Math.floor(simMin / 60) % 24).padStart(2, '0')}:${String(simMin % 60).padStart(2, '0')}`
+  moodEl.textContent = MOOD[intent.mood] || '·'
+  moodName.textContent = intent.mood
+  const dk = intent.meta?.daysKnown ?? 1, f = intent.meta?.familiarity ?? 0
+  bondEl.textContent = `knows you ${dk}d` + (f > 0.15 ? ' 💛' : '')
+  doingEl.textContent = ACTION[intent.behavior] || ''
+  simMin += STEP_MIN * speed
+}
+
+// ── interaction ──
+addEventListener('mousemove', () => { lastMove = Date.now(); moved = true; vids[front].play?.().catch(() => {}) })
+awayBtn.onclick = () => {
+  present = !present
+  awayBtn.textContent = present ? '👋 step away' : '🐤 I’m back'
+  awayBtn.classList.toggle('primary', present)
+  if (present) lastMove = Date.now()
+}
+const SPEEDS = [1, 3, 8]
+speedBtn.onclick = () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; speedBtn.textContent = `⏩ ${speed}×` }
+
+// ── go ──
+setVideo('monet-idle-1')
+step()
+setInterval(step, 1600)
+</script>
+</body>
+</html>
