@@ -220,3 +220,40 @@ A being who doesn't reset — not even her own afternoon.
 
 Next: small texture passes (weather/umbrella, richer mood→clip), a saved example trace, light
 hygiene; then keep the loop alive until the window closes.
+
+### Strategic turn — 2026-06-26 evening (a conversation with Jin) — the soul is NOT the moat
+A live conversation reframed the priorities; capturing it because it changes what's worth building:
+- **Built a live `--watch` panel** (loop.mjs) so you SEE her inner weather (mood, drive bars, why),
+  not a log. Committed.
+- **Honest finding: the drive system is commodity — and it's *already* prior art at Sprited.** It's
+  textbook utility-AI (homeostatic drives → softmax action-selection + hysteresis), the lineage of
+  The Sims / Creatures. And `../anima/` (Sprited's being lineage, v1–v35) already has it:
+  `anima/v*/src/driveDecision.ts` does **softmax drive-arbitration with temperature**, and
+  `agentAnimator.ts` has **DWELL_MS** = my hysteresis. I independently reinvented the same core
+  (should have checked prior art first). Difference is only domain: anima's = a *creature foraging in
+  a world* (food/water urgency); mine = a *companion attuned to you* (energy-circadian / social /
+  mood / bond / perceiving the user). Same family — should **converge, not duplicate**.
+- **Where OUR tech actually is → the BODY.** Sprited bakes characters as color + alpha + **normal +
+  depth** (per-clip sidecars; webcodecs-stacked). *Nobody else has depth+normal for a character.*
+  Today it's only used for compositing/effects. The novel, defensible move = **drive that depth-aware
+  body PROCEDURALLY past its pre-baked clips** — real gaze at the cursor, micro-reactions, parallax +
+  screen-light relight from depth/normal — a continuously, physically responsive 2.5D being. That's
+  the line between a clip-loop (everyone) and a being (us), and it kills the "it's just videos"
+  ceiling. Drives = commodity floor; **depth-driven responsive body = the moat.** See `MOAT.md`.
+- **Watching the user's screen ≠ betraying the vision** *iff* it's *attunement* (she's WITH you), not
+  *service* (an assistant who reacts to you → commodity grid). Guardrails: perception feeds her
+  drives not commands; she empathizes, never becomes useful; on-device only.
+- **The cursor is the cheapest big win** (`screen.getCursorScreenPoint()`, no permission) — "facing
+  forward" → "watching you."
+
+**For Jin (the real next moves — product, do WITH him, not autonomously here):**
+1. **Integrate the loop into the body** — staged: (1) soul runs in main.js, debug-HUD shows her inner
+   state on-screen (observe-only, dev-safe); (2) soul drives the clips (she lives on the desktop);
+   (3) route react/speak through the byok brain.
+2. **Prototype the depth-driven responsive body** (the moat) — gaze/parallax/relight from the existing
+   depth+normal sidecars. This is the thing only Sprited can build.
+3. **Converge with anima** — fold my companion layer onto anima's driveDecision rather than keeping a
+   parallel system. Jin's call.
+
+The autonomous loop will now spend cycles on what it CAN do here (experiments/ only): articulate the
+moat (MOAT.md), spec the integration + the depth-body, keep tests green — not pad the commodity soul.
