@@ -315,3 +315,23 @@ child's-heart philosophy. That's the moat, in words.
 
 heartbeat: idle. The being now has a who (silly-wise-child) and a where (the corner he loves).
 Awaiting Jin for the voice/soul bible + the de-risk experiment.
+
+### The soul got a body you can sit with — 2026-06-27 — `web/` experience prototype
+Jin asked for a prototype in experiments/ that lets you *experience her in the first 5 minutes* — past
+the terminal panel. Built `web/` (index.html + voice.mjs + serve.mjs): the first time the soul
+(engine) + her **voice** (silly-wise-child, in `voice.mjs` — the seed of her voice/soul bible) + her
+**real body** (the 2D clips) come together. She wakes into a 7am morning and lives an accelerated day
+(idles / plays / naps / tends / speaks mood-matched lines); mouse-move → she reacts; step-away →
+come-back → she greets (familiarity grows). Stacked color/alpha clips shown via `mix-blend-mode:
+screen` on a dark cozy stage — **no per-frame compositing needed** (the clips are color-on-black, so
+screen-blend floats her cleanly). serve.mjs serves the repo root with **HTTP Range** (Chrome `<video>`
+hangs without it — that was a real debug). Verified in-browser: soul ticks a full day (07:00→14:40,
+content→curious), mood↔voice wired, she renders cleanly. Two gotchas found + fixed: (1) missing
+`</script>` closing tag silently killed the whole module; (2) the automated browser power-pauses muted
+video (background) — fine in a real focused tab, plus a mousemove play-kick for insurance.
+
+This closes the loop the soul opened: she now *lives a visible day with a voice* — what (engine) + who
+(personality) + body (clips), in one place you can feel. **Next (Jin):** flesh out `voice.mjs` into
+the real voice/soul bible; the de-risk render experiment; the form/terminal-being calls.
+
+heartbeat: idle, prototype shipped + verified. Awaiting Jin.
