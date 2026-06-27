@@ -14,8 +14,13 @@ node experiments/monet-soul/loop.mjs       # her heartbeat LIVE — a beat every
 ```
 
 - `soul.mjs` — the engine: `tick(state, world) -> { state, intent }`. Drives (energy/curiosity/
-  restlessness/social) → mood → a weighted-random behavior (doze/react/wander/speak/idle).
+  restlessness/social) → mood → a weighted-random behavior (doze/idle/wander/react/play/speak).
+- `loop.mjs` — her heartbeat: steps the engine on a wall clock (`live` / `--demo`).
+- `adapter.mjs` — turns real OS signals (idle, screen text) into her `world`; copy-paste sketch for
+  wiring into apps/desktop's main.js.
 - `sim.mjs` — a seeded 24h simulator that logs what she does.
+- `test.mjs` — light assertions guarding the promises of aliveness (`node …/test.mjs`).
+- `WIRING.md` — the body-wiring contract (how she plugs into the Electron shell).
 - `JOURNAL.md` — the build log (read this first).
 
 > Status: early. The engine runs; making the day read *believably alive* is the ongoing work — see

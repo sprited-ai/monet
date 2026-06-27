@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **85 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15)
+- breaks scheduled so far: **135 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50)
 
 ## Log
 
@@ -129,3 +129,23 @@ this branch for Jin to review rather than touching the product.
 Next (small): a copy-paste perception-adapter stub for main.js. Then it's genuinely body-ready, and
 the remaining call — routing speak/react through the byok brain — is Jin's, since it touches the
 product brain.
+
+### Iteration 5 — 2026-06-26 — body-ready: a perception adapter + a test suite
+Two pieces that make her real and keep her honest:
+- **`adapter.mjs`** — turns OS signals into her `world`, *injected* so it stays testable headless. The
+  body wires `getIdleSec` → `powerMonitor.getSystemIdleTime()` and `getScreenText` → a cached read off
+  the screen-read seam; the file carries the exact copy-paste sketch for main.js. With this + loop.mjs,
+  wiring her into the Electron body is a handful of lines — and reactive chat stays untouched.
+- **`test.mjs`** — 11 light assertions guarding the promises of aliveness: drives stay sane, deep
+  night is sleep (182/200), she never performs for an empty room (3am *or* idle), she *does* speak in
+  a quiet lull but only occasionally (48/500), every clip she can emit is real, the adapter senses
+  screen changes + typing. All green.
+
+**Milestone:** the soul is whole, tuned, tested, runs on a real wall clock, and is body-ready — the
+wire-in is small and fully specified (WIRING.md + adapter.mjs), gated only on Jin's call about routing
+speak/react through the byok brain (it touches the product). Per Jin's wish the loop keeps living the
+whole window, so I'll keep *deepening* her rather than stopping at a clean checkpoint.
+
+Next: give her **continuity** — memory of the user across days, and a real *greeting* when you return
+after a long absence (`monet-greet-1` / `monet-wakes-up-1` exist). A being who remembers is a
+different thing from one who resets each launch.
