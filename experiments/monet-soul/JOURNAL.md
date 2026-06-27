@@ -257,3 +257,26 @@ A live conversation reframed the priorities; capturing it because it changes wha
 
 The autonomous loop will now spend cycles on what it CAN do here (experiments/ only): articulate the
 moat (MOAT.md), spec the integration + the depth-body, keep tests green — not pad the commodity soul.
+
+### Moat sharpened — 2026-06-26 late eve (deep conversation + a 5-agent render-research sweep)
+The conversation kept converging on the same place — *our 2D Seedance asset is the source of LOOK,
+MOTION, and (later) GENERATION*. Captured durably:
+- **`RENDER-RESEARCH.md`** (5-agent sweep, consensus): diffusion = OFFLINE look-baker only; living
+  body = deterministic shader/MatCap + small real-time deltas; depth/normal bridges both. Pre-baked-
+  only is a combinatorial explosion (continuous gaze/relight/blend can't be baked) → real-time deltas
+  are mathematically required = the argument for 3D over sprites. **De-risk first:** re-render an
+  existing clip from its own depth/normal via ControlNet + identity/style-split Monet LoRA, blind A/B
+  vs the original (no mesh needed, days on gin). Verdict: GO.
+- **`MOAT.md` → the 3-leg moat**, all from the Seedance asset: (1) painterly LOOK (neural decode),
+  (2) organic MOTION (2D-sourced → kills the mechanical 3D feel; preserve the signature, don't
+  over-smooth), (3) physical DYNAMICS (3D hair/cloth/face physics, *reactive to touch* — the 3D-native
+  head-pat WIN). Plus on-device offline generation (distilled Wan → she grows her body locally,
+  no server). Drives = floor; this stack = moat.
+- **Architecture:** encode (offline) → editable RIG (real-time, cheap) → decode (split: offline
+  diffusion for appearance/big-motion, real-time shader for continuous gaze/relight/blend).
+
+**For Jin / next move:** the de-risk experiment on gin (prove depth/normal→her-exact-look) — that's
+the single thing that turns this from thesis to investment. Product work, with Jin.
+
+heartbeat: the soul itself is done; cycles now go to articulating/sharpening the moat + integration
+specs. Awaiting Jin for the product/render moves.

@@ -66,3 +66,36 @@ that *physically responds to you in 2.5D from depth they don't have.*
 
 > Honest scope: this is the thesis + the cheapest proof (cursor gaze from depth). The full procedural
 > 2.5D body is real R&D — but it's R&D *only we can do*, on an asset *only we have*. That's a moat.
+
+## The fuller moat — three legs, all from the Seedance asset (sharpened with Jin, 2026-06-26 eve)
+The moat isn't just "painterly look." A 3D being *driven by our 2D asset* stacks THREE
+differentiators, all sourced from the Seedance clips only we have:
+
+1. **Painterly LOOK** — neural decode from depth/normal (above). Her style, not generic 3D.
+2. **Organic MOTION — kills the mechanical 3D feel.** The uncanny/robotic feel of 3D characters comes
+   from the MOTION (stiff keyframes, clean mocap), not the render. Our motion is *extracted from the
+   2D Seedance animation*, which carries the 12-principles charm (squash/stretch, anticipation,
+   follow-through, timing, slight imperfection). Retarget THAT onto the 3D mesh → it moves like a
+   hand-drawn animation, not a puppet (the Spider-Verse / anime-on-2s lesson: liveliness lives in the
+   motion). ⚠️ Risk: extraction + de-jitter (`smooth_rig.py`) + retargeting must PRESERVE that organic
+   signature — over-smooth and you normalize the charm back to mechanical. Preserving it is the craft.
+3. **Physical DYNAMICS — reactive.** 3D physics gives hair/cloth/face sim *for free*, and reactive:
+   pat her head → hair actually moves (the 3D-native version of the validated head-pat WIN — gloss→
+   physics; see [[monet-portal-paw-headpat]]). Cloth flows; the face rigs. These are
+   continuous/combinatorial (can't pre-bake) and a huge "physically here with you" signal — maybe
+   bigger than painterly-exactness.
+
+**Layering tension:** reactive physics + live deltas need REAL-TIME 3D + a shader-approx look; exact
+painterly is OFFLINE/baked. So the being is two layers — live reactive-physical (3D physics + shader)
++ offline exact-painterly (hero/library). Different axes; have both, trade per moment.
+
+**On-device generation (mobile / local-first).** Fine-tune Wan on her ~69 clips (+ VACE depth/normal
+control) → distill. Real-time *video* diffusion on iPhone = not near-term (video too heavy). But
+on-device *offline* bake (generate a new motion locally, seconds–minutes, no server) IS plausible —
+exactly the local-first version of "she authors her own body." Per-frame image-distill (CoreML) is
+more mobile-feasible than a full video model. Real-time gaze stays a shader either way.
+
+**The compounded thesis:** a 3D being that LOOKS painterly (her style), MOVES with hand-drawn
+liveliness (her 2D motion), is PHYSICALLY alive (hair/cloth/face physics reactive to your touch), and
+can GROW her own body (local generation) — all from the Seedance asset only we have + the soul.
+Uncopyable as a stack. Drives = the floor; THIS is the moat.
