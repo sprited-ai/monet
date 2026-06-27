@@ -25,9 +25,12 @@ export function freshBond() {
 
 export function freshState(hour = 12, bond) {
   const night = hour >= 23 || hour < 6
+  // energy is seeded from the clock: launch her at 2am and she starts sleepy, not "bright".
+  const drives = { energy: circadianEnergy(hour), curiosity: 0.3, restlessness: 0.2, social: 0.4 }
   return {
-    // energy is seeded from the clock: launch her at 2am and she starts sleepy, not "bright".
-    drives: { energy: circadianEnergy(hour), curiosity: 0.3, restlessness: 0.2, social: 0.4 },
+    drives,
+    mood: deriveMood(drives, hour), // her current feeling (held with inertia, see tick)
+    moodWant: 0,
     lastBehavior: night ? 'doze' : 'idle',
     sinceBehavior: 0,
     sinceSpoke: 99, // ticks since she last spoke (a cooldown so she isn't chatty)
@@ -74,7 +77,16 @@ export function tick(state, world) {
   const aloneMin = (world.interactionSec ?? world.idleSec ?? 0) / 60
   d.social = clamp01(0.2 + Math.min(0.8, aloneMin / 90))
 
-  const mood = deriveMood(d, hour)
+  // mood emerges from the drives, but with INERTIA: a new feeling has to want it for a few ticks
+  // before it takes hold, so she doesn't flicker between moods at a threshold. Feelings have weight.
+  const targetMood = deriveMood(d, hour)
+  let mood = state.mood ?? targetMood
+  let moodWant = state.moodWant ?? 0
+  if (targetMood === mood) moodWant = 0
+  else if (++moodWant >= 3) {
+    mood = targetMood
+    moodWant = 0
+  }
   const night = hour >= 23 || hour < 6
   // she rises ONCE each morning (was sleeping, hasn't risen yet, early day) — a real wake, not a snap
   const wantsWake = !night && hour < 11 && !(state.risen ?? !night) && (state.asleep || state.lastBehavior === 'doze')
@@ -117,9 +129,22 @@ export function tick(state, world) {
   if (behavior === 'wake') { next.energy = clamp01(d.energy + 0.05); next.restlessness = 0.2 }
   if (behavior === 'tend') { next.energy = clamp01(d.energy + 0.03) }
 
+  // a compact "why" snapshot the body can surface in a debug HUD (or just log) — her inner weather.
+  const intent = render(behavior, mood, world, rng, bond)
+  intent.meta = {
+    energy: +next.energy.toFixed(2),
+    curiosity: +next.curiosity.toFixed(2),
+    restlessness: +next.restlessness.toFixed(2),
+    social: +next.social.toFixed(2),
+    familiarity: +bond.familiarity.toFixed(3),
+    daysKnown: bond.daysKnown,
+  }
+
   return {
     state: {
       drives: next,
+      mood,
+      moodWant,
       lastBehavior: behavior,
       sinceBehavior: behavior === state.lastBehavior ? state.sinceBehavior + 1 : 0,
       sinceSpoke: behavior === 'speak' ? 0 : (state.sinceSpoke ?? 0) + 1,
@@ -129,7 +154,7 @@ export function tick(state, world) {
       bond,
       asleep: behavior === 'doze' && next.energy < 0.5,
     },
-    intent: render(behavior, mood, world, rng, bond),
+    intent,
   }
 }
 

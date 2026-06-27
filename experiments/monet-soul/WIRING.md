@@ -41,6 +41,8 @@ seam we already built. No new capability required to make her live.
   as a stand-in. A real bubble is its own piece of work (noted for Jin).
 - **`mood`** → available to tint UI / pick the speaking clip; not load-bearing.
 - **`reason`** → never shown; it's for the journal / a debug HUD (why she did what she did).
+- **`meta`** → a compact snapshot of her inner weather (`energy`, `curiosity`, `restlessness`,
+  `social`, `familiarity`, `daysKnown`). Optional — feed a debug overlay, or ignore it.
 
 ## Driver swap (the whole point — see [[living-agent-not-vtuber]])
 

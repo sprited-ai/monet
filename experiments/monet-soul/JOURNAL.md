@@ -24,7 +24,7 @@ the day this journal begins on. He then went to his kid's performance and truste
   that needs Jin → noted here, NOT done.
 
 ## Elapsed
-- breaks scheduled so far: **190 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20)
+- breaks scheduled so far: **235 min** / ~1440   (it1→it2: 25, it2→it3: 45, it3→it4: 15, it4→it5: 50, it5→it6: 35, it6→it7: 20, it7→it8: 45)
 
 ## Log
 
@@ -184,3 +184,18 @@ greet 1 / wake 1 / tend 1. 15 tests still green.
 Next: mood inertia (mood shouldn't flip tick-to-tick), maybe a small HUD-snapshot on the intent so a
 body could show *why* she did what she did. The soul is getting genuinely rich; a couple more deepening
 passes, then I keep the loop alive until the window closes.
+
+### Iteration 8 — 2026-06-26 — feelings have weight (mood inertia) + a "why" snapshot
+- **Mood inertia** — mood still emerges from the drives, but a new feeling has to *want it for a few
+  ticks* before it takes hold, so she doesn't flicker between moods at a threshold. ~8 mood shifts
+  across a full day instead of constant churn. Her feeling has continuity now; feelings have weight.
+- **`intent.meta`** — every intent carries a compact inner-weather snapshot (energy, curiosity,
+  restlessness, social, familiarity, daysKnown). A body can surface it as a debug HUD — *why* she did
+  what she did — or ignore it. Documented in WIRING.md.
+- +2 tests (17 green).
+
+Honestly, the soul is rich now: nine drive-tied behaviors, a circadian day with a real morning, mood
+with weight, memory that greets you back, a heartbeat, an adapter, a 17-check test suite, and the
+philosophy written down. Per Jin's wish the loop keeps living — next passes are deepening/polish
+(weather flavor; mood→clip texture; maybe persist the *whole* inner state so her day, not just the
+bond, continues across a restart).

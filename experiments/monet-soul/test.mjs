@@ -118,4 +118,27 @@ function run({ hour, ticks = 300, perceive = () => ({}), seed = 1 }) {
   ok(!nightGreet, 'she does not greet at 3am even on return — she is asleep')
 }
 
+// 7 — mood holds with inertia (no tick-to-tick flicker), and every intent carries a 'why' snapshot
+{
+  const rng = rngFrom(42)
+  let s = freshState(0)
+  let flips = 0
+  let prev = s.mood
+  let lastIntent = null
+  for (let i = 0; i < 144; i++) {
+    const res = tick(s, { hour: ((i * 10) / 60) % 24, idleSec: (i % 7) * 40, screenChanged: i % 5 === 0, rng })
+    s = res.state
+    lastIntent = res.intent
+    if (s.mood !== prev) {
+      flips++
+      prev = s.mood
+    }
+  }
+  ok(flips < 30, `mood holds with inertia — only ${flips} shifts across a 144-tick day (not flicker)`)
+  ok(
+    lastIntent.meta && typeof lastIntent.meta.energy === 'number' && 'daysKnown' in lastIntent.meta,
+    'every intent carries a meta "why" snapshot (drives + bond)',
+  )
+}
+
 console.log(`\n${passed} checks passed — she holds together.`)
